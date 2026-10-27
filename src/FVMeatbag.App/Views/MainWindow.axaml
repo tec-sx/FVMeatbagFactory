@@ -1,0 +1,49 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:FVMeatbag.App.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
+        x:Class="FVMeatbag.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="FV Meatbag Factory"
+        Width="1280" Height="800">
+  <DockPanel>
+    <Menu DockPanel.Dock="Top">
+      <MenuItem Header="_File">
+        <MenuItem Header="_New Project" Command="{Binding NewProjectCommand}" />
+      </MenuItem>
+    </Menu>
+
+    <Border DockPanel.Dock="Bottom" Padding="8,4" Background="#1A1A1A">
+      <TextBlock Text="{Binding Status}" FontSize="12" />
+    </Border>
+
+    <Grid ColumnDefinitions="260,4,*,4,300">
+      <DockPanel Grid.Column="0">
+        <TextBlock DockPanel.Dock="Top" Text="Outliner" Margin="8" FontWeight="SemiBold" />
+        <TreeView ItemsSource="{Binding Outliner}" SelectedItem="{Binding SelectedComponent}">
+          <TreeView.ItemTemplate>
+            <TreeDataTemplate DataType="vm:SceneComponentViewModel" ItemsSource="{Binding Children}">
+              <TextBlock Text="{Binding Name}" />
+            </TreeDataTemplate>
+          </TreeView.ItemTemplate>
+        </TreeView>
+      </DockPanel>
+
+      <GridSplitter Grid.Column="1" ResizeDirection="Columns" />
+
+      <!-- The Vulkan viewport control replaces this placeholder in the rendering milestone. -->
+      <Border Grid.Column="2" Background="#202124">
+        <TextBlock Text="Viewport (Vulkan)" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5" />
+      </Border>
+
+      <GridSplitter Grid.Column="3" ResizeDirection="Columns" />
+
+      <DockPanel Grid.Column="4">
+        <TextBlock DockPanel.Dock="Top" Text="Details" Margin="8" FontWeight="SemiBold" />
+        <TextBlock Margin="8" Text="{Binding SelectedComponent.Name, FallbackValue='Nothing selected'}" />
+      </DockPanel>
+    </Grid>
+  </DockPanel>
+</Window>

@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Backend-agnostic rendering contracts and the shared PBR material model. -->
+  <PropertyGroup>
+    <RootNamespace>FVMeatbag.Rendering</RootNamespace>
+  </PropertyGroup>
+</Project>

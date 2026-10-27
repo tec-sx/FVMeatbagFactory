@@ -1,0 +1,68 @@
+namespace FVMeatbag.Core.Project;
+
+/// <summary>A node in the project hierarchy. The hierarchy owns the data; scene components only display it.</summary>
+public abstract class ProjectItem
+{
+    private readonly List<ProjectItem> _children = [];
+
+    protected ProjectItem(string name)
+    {
+        Name = name;
+    }
+
+    public Guid Id { get; } = Guid.NewGuid();
+    public string Name { get; set; }
+    public ProjectItem? Parent { get; private set; }
+    public IReadOnlyList<ProjectItem> Children => _children;
+
+    public T Add<T>(T child) where T : ProjectItem
+    {
+        if (child.Parent is not null)
+        {
+            throw new InvalidOperationException($"{child.Name} already has a parent.");
+        }
+        _children.Add(child);
+        child.Parent = this;
+        return child;
+    }
+
+    public bool Remove(ProjectItem child)
+    {
+        if (!_children.Remove(child))
+        {
+            return false;
+        }
+        child.Parent = null;
+        return true;
+    }
+
+    public IEnumerable<ProjectItem> DescendantsAndSelf()
+    {
+        yield return this;
+        foreach (var child in _children)
+        {
+            foreach (var item in child.DescendantsAndSelf())
+            {
+                yield return item;
+            }
+        }
+    }
+
+    public override string ToString() => Name;
+}
+
+public sealed class ProjectFolder(string name) : ProjectItem(name);
+
+/// <summary>
+/// A skeletal mesh asset. Placeholder: geometry, skin weights, morph targets and poses are added
+/// as the import pipeline lands.
+/// </summary>
+public sealed class SkeletalMeshAsset(string name, string? sourcePath = null) : ProjectItem(name)
+{
+    public string? SourcePath { get; } = sourcePath;
+
+    /// <summary>Bumped on every edit, so graph change detection can compare versions instead of data.</summary>
+    public long Version { get; private set; }
+
+    public void MarkModified() => Version++;
+}
