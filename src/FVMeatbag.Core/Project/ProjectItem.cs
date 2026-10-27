@@ -57,8 +57,8 @@ public abstract class ProjectItem
 public sealed class ProjectFolder(string name) : ProjectItem(name);
 
 /// <summary>
-/// A skeletal mesh asset: geometry, and for rigged meshes the skeleton and skin weights. Morph
-/// targets and poses are added as the pipeline grows.
+/// A skeletal mesh asset: geometry, and for rigged meshes the skeleton, skin weights and pose.
+/// Morph targets are added as the pipeline grows.
 /// </summary>
 public sealed class SkeletalMeshAsset(string name, string? sourcePath = null) : ProjectItem(name)
 {
@@ -86,9 +86,13 @@ public sealed class SkeletalMeshAsset(string name, string? sourcePath = null) : 
         set
         {
             _skeleton = value;
+            Pose = value.Map(s => new SkeletonPose(s));
             MarkModified();
         }
     }
+
+    /// <summary>The skeleton's current pose, saved with the project; None for a static mesh. Starts at rest.</summary>
+    public Maybe<SkeletonPose> Pose { get; private set; }
 
     /// <summary>Bumped on every edit, so graph change detection can compare versions instead of data.</summary>
     public long Version { get; private set; }

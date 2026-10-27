@@ -38,7 +38,7 @@ public static class ProjectFile
             Name = project.Name,
             Camera = CameraDocument.From(project.Camera),
             Light = LightDocument.From(project.Light),
-            Meshes = [.. project.MeshAssets.Select(a => new MeshDocument { Name = a.Name, Path = a.SourcePath?.Replace('\\', '/') })],
+            Meshes = [.. project.MeshAssets.Select(MeshDocument.From)],
         };
         var path = Path.Combine(directory, FileName);
         var temp = path + ".tmp";
@@ -71,8 +71,20 @@ public static class ProjectFile
             var loaded = project.ResolvePath(mesh.Path).Bind(file => TryImport(file, problems));
             asset.Geometry = loaded.Map(l => l.Geometry);
             asset.Skeleton = loaded.Bind(l => l.Skeleton);
+            if (asset.Pose.TryGetValue(out var pose))
+            {
+                mesh.ApplyPose(pose, problems);
+            }
         }
         return project;
+    }
+
+    /// <summary>True if the project in <paramref name="directory"/> lists at least one mesh. Reads only the project file.</summary>
+    public static bool HasMeshes(string directory)
+    {
+        var path = Path.Combine(directory, FileName);
+        var document = JsonSerializer.Deserialize<ProjectDocument>(File.ReadAllText(path), Options);
+        return document?.Meshes is { Count: > 0 };
     }
 
     /// <summary>
@@ -131,6 +143,65 @@ public static class ProjectFile
     {
         public string? Name { get; set; }
         public string? Path { get; set; }
+
+        /// <summary>Posed bones only; bones at rest are left out.</summary>
+        public List<BonePoseDocument>? Pose { get; set; }
+
+        public static MeshDocument From(SkeletalMeshAsset asset)
+        {
+            var posed = asset.Pose.Match(
+                p => Enumerable.Range(0, p.Skeleton.Count).Where(p.IsPosed).Select(b => BonePoseDocument.From(p, b)).ToList(),
+                () => []);
+            return new MeshDocument
+            {
+                Name = asset.Name,
+                Path = asset.SourcePath?.Replace('\\', '/'),
+                Pose = posed.Count > 0 ? posed : null,
+            };
+        }
+
+        public void ApplyPose(SkeletonPose pose, ICollection<string>? problems)
+        {
+            foreach (var bone in Pose ?? [])
+            {
+                if (pose.Skeleton.FindBone(bone.Bone ?? "").TryGetValue(out var index))
+                {
+                    pose.Set(index, bone.ToTransform());
+                }
+                else
+                {
+                    problems?.Add($"{Name}: the pose names a bone the skeleton lacks ({bone.Bone}).");
+                }
+            }
+        }
+    }
+
+    private sealed class BonePoseDocument
+    {
+        public string? Bone { get; set; }
+        public float[]? Translation { get; set; }
+
+        /// <summary>Quaternion x, y, z, w.</summary>
+        public float[]? Rotation { get; set; }
+
+        public float[]? Scale { get; set; }
+
+        public static BonePoseDocument From(SkeletonPose pose, int bone)
+        {
+            var t = pose[bone];
+            return new BonePoseDocument
+            {
+                Bone = pose.Skeleton.Bones[bone].Name,
+                Translation = [t.Translation.X, t.Translation.Y, t.Translation.Z],
+                Rotation = [t.Rotation.X, t.Rotation.Y, t.Rotation.Z, t.Rotation.W],
+                Scale = [t.Scale.X, t.Scale.Y, t.Scale.Z],
+            };
+        }
+
+        public BoneTransform ToTransform() => new(
+            ToVector(Translation, Vector3.Zero),
+            Rotation is { Length: 4 } r ? Quaternion.Normalize(new Quaternion(r[0], r[1], r[2], r[3])) : Quaternion.Identity,
+            ToVector(Scale, Vector3.One));
     }
 
     private sealed class CameraDocument

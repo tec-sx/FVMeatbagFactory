@@ -44,16 +44,15 @@ public sealed class AppHost : IDisposable
     public event EventHandler<int>? GraphEvaluated;
 
     /// <summary>
-    /// First-run setup, like an installer: creates Documents/Projects and the Demo project (with the
-    /// sample character) if they are missing, then opens Demo. Returns problems worth showing the user.
+    /// First-run setup, like an installer: creates Documents/Projects and installs the saved Demo
+    /// project (with the sample character) if they are missing, then opens Demo. Returns problems
+    /// worth showing the user.
     /// </summary>
     public IReadOnlyList<string> OpenStartupProject()
     {
         try
         {
-            // The sample character faces +X, so the Demo camera starts at its front.
-            var demoCamera = OrbitCameraSettings.Default with { YawDegrees = 90 };
-            return OpenProject(Workspace.EnsureCreated(SampleMeshes(), demoCamera));
+            return OpenProject(Workspace.EnsureCreated(DemoTemplate()));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException)
         {
@@ -62,13 +61,11 @@ public sealed class AppHost : IDisposable
         }
     }
 
-    /// <summary>Sample meshes shipped next to the executable (assets/Samples in the repository).</summary>
-    public static IReadOnlyList<string> SampleMeshes()
+    /// <summary>The saved Demo project shipped next to the executable (assets/Samples/Demo in the repository).</summary>
+    public static Maybe<string> DemoTemplate()
     {
-        var folder = Path.Combine(AppContext.BaseDirectory, "Samples");
-        return Directory.Exists(folder)
-            ? [.. Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories).Where(GltfImporter.IsSupported).Order(StringComparer.Ordinal)]
-            : [];
+        var folder = Path.Combine(AppContext.BaseDirectory, "Samples", ProjectWorkspace.DemoProjectName);
+        return ProjectFile.Exists(folder) ? folder : Maybe<string>.None;
     }
 
     public IReadOnlyList<string> OpenProject(string directory)
@@ -78,7 +75,7 @@ public sealed class AppHost : IDisposable
         return problems;
     }
 
-    /// <summary>Saves the open project, with the current camera and light. Returns the file written, or None for an in-memory project.</summary>
+    /// <summary>Saves the open project, with the current camera, light and poses. Returns the file written, or None for an in-memory project.</summary>
     public Maybe<string> SaveProject()
     {
         var project = Scene.Project.OrThrow("No project is open.");

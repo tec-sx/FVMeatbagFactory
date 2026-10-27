@@ -6,6 +6,7 @@ using FVMeatbag.Graph;
 using FVMeatbag.Rendering;
 using FVMeatbag.Scene;
 using FVMeatbag.Scene.Components;
+using FVMeatbag.Scene.Tools;
 
 namespace FVMeatbag.App.ViewModels;
 
@@ -13,6 +14,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 {
     private readonly List<SkeletonComponent> _watchedSkeletons = [];
     private string _message = "";
+    private TransformTool _shownTool;
 
     [ObservableProperty]
     private string _status = "No project";
@@ -43,6 +45,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Host.RootGraph.Evaluator.NodeFaulted += (_, e) => Report($"{e.Node.Name} failed: {e.Exception.Message}");
         Host.Scene.Camera.CameraNode!.OutputsChanged += (_, _) => (Details as CameraDetailsViewModel)?.Refresh();
         Host.Scene.Light.LightNode!.OutputsChanged += (_, _) => (Details as LightDetailsViewModel)?.Refresh();
+        Host.Scene.Manipulator.Changed += (_, _) => OnToolChanged();
 
         var problems = Host.OpenStartupProject();
         Report(problems.Count == 0 ? "Ready. File → Import Mesh… to load a .glb." : string.Join(" ", problems));
@@ -86,6 +89,38 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         get => DisplayMode == MeshDisplayMode.Shaded;
         set => SetDisplayMode(MeshDisplayMode.Shaded, value);
+    }
+
+    /// <summary>The viewport tool; the overlay buttons and Q, W, E, R set it.</summary>
+    public TransformTool Tool
+    {
+        get => Host.Scene.Manipulator.Tool;
+        set => Host.Scene.Manipulator.Tool = value;
+    }
+
+    // One per tool button; like the display modes they act as a radio group.
+    public bool IsSelectTool
+    {
+        get => Tool == TransformTool.Select;
+        set => SetTool(TransformTool.Select, value);
+    }
+
+    public bool IsMoveTool
+    {
+        get => Tool == TransformTool.Move;
+        set => SetTool(TransformTool.Move, value);
+    }
+
+    public bool IsRotateTool
+    {
+        get => Tool == TransformTool.Rotate;
+        set => SetTool(TransformTool.Rotate, value);
+    }
+
+    public bool IsScaleTool
+    {
+        get => Tool == TransformTool.Scale;
+        set => SetTool(TransformTool.Scale, value);
     }
 
     /// <summary>Shows or hides every skeleton's bones.</summary>
@@ -181,6 +216,40 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// <summary>Keys 4 to 7, as in Maya.</summary>
     [RelayCommand]
     private void SetDisplayMode(MeshDisplayMode mode) => DisplayMode = mode;
+
+    /// <summary>Keys Q, W, E, R, as in Maya.</summary>
+    [RelayCommand]
+    private void SelectTool(TransformTool tool) => Tool = tool;
+
+    private void SetTool(TransformTool tool, bool on)
+    {
+        if (on)
+        {
+            Tool = tool;
+        }
+    }
+
+    private void OnToolChanged()
+    {
+        if (_shownTool == Tool)
+        {
+            return;
+        }
+        _shownTool = Tool;
+        OnPropertyChanged(nameof(Tool));
+        OnPropertyChanged(nameof(IsSelectTool));
+        OnPropertyChanged(nameof(IsMoveTool));
+        OnPropertyChanged(nameof(IsRotateTool));
+        OnPropertyChanged(nameof(IsScaleTool));
+        var hint = Tool switch
+        {
+            TransformTool.Move => "Move: drag an arrow, or the square to move in the view plane.",
+            TransformTool.Rotate => "Rotate: drag a ring, or the outer ring to turn about the view.",
+            TransformTool.Scale => "Scale: drag an axis, or the center cube to scale evenly.",
+            _ => "Select: click a joint or bone.",
+        };
+        Report(Host.Scene.Manipulator.Target.HasValue || Tool == TransformTool.Select ? hint : $"{hint} Select a bone first.");
+    }
 
     private void SetDisplayMode(MeshDisplayMode mode, bool on)
     {

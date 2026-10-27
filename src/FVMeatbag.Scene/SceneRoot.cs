@@ -3,6 +3,7 @@ using FVMeatbag.Core.Import;
 using FVMeatbag.Core.Project;
 using FVMeatbag.Graph;
 using FVMeatbag.Scene.Components;
+using FVMeatbag.Scene.Tools;
 
 namespace FVMeatbag.Scene;
 
@@ -25,6 +26,7 @@ public sealed class SceneRoot
         Root.Attach(this);
         Camera = Root.AddChild(new OrbitCameraComponent());
         Light = Root.AddChild(new DirectionalLightComponent());
+        Manipulator = new BoneManipulator(this);
     }
 
     public Graph.Graph Graph { get; }
@@ -33,6 +35,9 @@ public sealed class SceneRoot
     public DirectionalLightComponent Light { get; }
     public SceneComponent? Selected { get; private set; }
     public GizmoComponent? Gizmo { get; private set; }
+
+    /// <summary>The viewport tool (select, move, rotate, scale) and its gizmo for the selected bone.</summary>
+    public BoneManipulator Manipulator { get; }
 
     /// <summary>The project whose assets the scene shows.</summary>
     public Maybe<CharacterProject> Project { get; private set; }
@@ -106,9 +111,9 @@ public sealed class SceneRoot
         {
             LocalTransform = Transform.Identity with { Position = -center },
         };
-        if (asset.Skeleton.TryGetValue(out var skeleton))
+        if (asset.Pose.TryGetValue(out var pose))
         {
-            mesh.AddChild(new SkeletonComponent(skeleton) { Visible = ShowBones });
+            mesh.AddChild(new SkeletonComponent(pose, asset.Geometry) { Visible = ShowBones });
         }
         return Root.AddChild(mesh);
     }

@@ -5,7 +5,7 @@ FV Meatbag Factory includes the following third-party assets. NuGet packages are
 
 ## Material Design Icons
 
-The viewport toolbar icons in `src/FVMeatbag.App/Assets/Icons.axaml` are SVG paths from
+The viewport toolbar and tool overlay icons in `src/FVMeatbag.App/Assets/Icons.axaml` are SVG paths from
 [Material Design Icons](https://pictogrammers.com/library/mdi/) 7.4.47 by Pictogrammers,
 released under the Pictogrammers Free License; the icons themselves are licensed under the
 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
@@ -18,8 +18,12 @@ released under the Pictogrammers Free License; the icons themselves are licensed
 | `circle-opacity` | Shaded | Michael Irigoyen |
 | `bone` | Show bones | Austin Andrews |
 | `fit-to-screen-outline` | Frame all | Google |
+| `cursor-default-outline` | Select tool | Austin Andrews |
+| `arrow-all` | Move tool | Austin Andrews |
+| `rotate-3d-variant` | Rotate tool | Austin Andrews |
+| `resize` | Scale tool | Austin Andrews |
 
 ## 3D Male Base Mesh
 
-`assets/Samples/MaleBaseMesh/MaleBaseMesh.glb` by orange-juice-games, CC0 1.0 (public domain).
-See [its README](assets/Samples/MaleBaseMesh/README.md) and LICENSE.
+`assets/Samples/Demo/Meshes/MaleBaseMesh.glb` by orange-juice-games, CC0 1.0 (public domain).
+See the [Demo project README](assets/Samples/Demo/README.md) and `MaleBaseMesh.LICENSE.txt` next to the file.

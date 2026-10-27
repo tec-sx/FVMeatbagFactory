@@ -13,7 +13,7 @@ public enum GizmoMode
 /// <summary>
 /// Transform gizmo for the selected component. It sits under the scene root but its world matrix is
 /// wired to the target's, so it follows the target through the graph rather than through code.
-/// Move/rotate/scale interaction nodes are added to its graph in a later milestone.
+/// Moving whole components is a later milestone; bones are posed with <see cref="Tools.BoneManipulator"/>.
 /// </summary>
 public sealed class GizmoComponent(SceneComponent target) : SceneComponent($"Gizmo({target.Name})")
 {

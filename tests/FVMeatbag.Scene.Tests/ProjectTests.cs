@@ -26,30 +26,65 @@ public sealed class ProjectTests : IDisposable
     }
 
     [Fact]
-    public void First_run_puts_the_sample_character_into_the_demo_project()
+    public void First_run_installs_the_saved_demo_project_with_the_sample_character()
     {
         var workspace = new ProjectWorkspace(_temp.Combine("Projects"));
 
-        var demo = ProjectFile.Load(workspace.EnsureCreated([SkeletonImportTests.SamplePath("MaleBaseMesh", "MaleBaseMesh.glb")]));
+        var demo = ProjectFile.Load(workspace.EnsureCreated(SkeletonImportTests.SamplePath("Demo")));
 
         var mesh = Assert.Single(demo.MeshAssets);
         Assert.Equal("MaleBaseMesh", mesh.Name);
         Assert.Equal("Meshes/MaleBaseMesh.glb", mesh.SourcePath);
         Assert.True(File.Exists(_temp.Combine("Projects", "Demo", "Meshes", "MaleBaseMesh.glb")));
         Assert.Equal(56, mesh.Skeleton.Value.Count);
+        Assert.True(mesh.Pose.Value.IsRest);
+        Assert.Equal(90, demo.Camera.YawDegrees); // the sample faces +X
+    }
+
+    [Fact]
+    public void An_empty_demo_from_an_earlier_build_gets_the_sample_character()
+    {
+        var workspace = new ProjectWorkspace(_temp.Combine("Projects"));
+        workspace.EnsureCreated();
+
+        var demo = ProjectFile.Load(workspace.EnsureCreated(SkeletonImportTests.SamplePath("Demo")));
+
+        Assert.Equal("MaleBaseMesh", Assert.Single(demo.MeshAssets).Name);
     }
 
     [Fact]
     public void Later_runs_keep_the_existing_demo_project()
     {
         var workspace = new ProjectWorkspace(_temp.Combine("Projects"));
-        var demo = ProjectFile.Load(workspace.EnsureCreated());
-        demo.Camera = demo.Camera with { YawDegrees = 90 };
+        var template = SkeletonImportTests.SamplePath("Demo");
+        var demo = ProjectFile.Load(workspace.EnsureCreated(template));
+        demo.Camera = demo.Camera with { YawDegrees = 30 };
         ProjectFile.Save(demo);
 
-        workspace.EnsureCreated();
+        workspace.EnsureCreated(template);
 
-        Assert.Equal(90, ProjectFile.Load(workspace.DemoDirectory).Camera.YawDegrees);
+        Assert.Equal(30, ProjectFile.Load(workspace.DemoDirectory).Camera.YawDegrees);
+    }
+
+    [Fact]
+    public void Poses_are_saved_with_the_project()
+    {
+        var directory = _temp.Combine("Projects", "Arm");
+        var project = new CharacterProject("Arm", directory);
+        var path = ProjectFile.CopyIntoProject(project, TestSkinnedMeshes.WriteBentArm(_temp.Combine("Arm.glb"), Vector3.Zero));
+        var mesh = GltfImporter.Load(_temp.Combine("Projects", "Arm", path));
+        var asset = project.Meshes.Add(new SkeletalMeshAsset("Arm", path) { Geometry = mesh.Geometry, Skeleton = mesh.Skeleton });
+        var posed = new BoneTransform(new Vector3(0.1f, 1.2f, 0), Quaternion.CreateFromAxisAngle(Vector3.UnitX, 0.5f), new Vector3(1, 2, 1));
+        asset.Pose.Value.Set(1, posed);
+        ProjectFile.Save(project);
+
+        var loaded = Assert.Single(ProjectFile.Load(directory).MeshAssets).Pose.Value;
+
+        Assert.False(loaded.IsPosed(0));
+        Assert.Equal(posed.Translation, loaded[1].Translation);
+        Assert.True(MathF.Abs(Quaternion.Dot(posed.Rotation, loaded[1].Rotation)) > 0.99999f);
+        Assert.Equal(posed.Scale, loaded[1].Scale);
+        Assert.DoesNotContain("\"Lower\"", File.ReadAllText(Path.Combine(directory, ProjectFile.FileName))); // bones at rest are left out
     }
 
     [Fact]

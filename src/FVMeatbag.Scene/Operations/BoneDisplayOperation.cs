@@ -43,6 +43,10 @@ public enum BoneSide
 public struct BoneDisplayInput
 {
     public Maybe<Skeleton> Skeleton;
+
+    /// <summary>Model-space bone transforms of the current pose; empty means the rest pose.</summary>
+    public ReadOnlyMemory<Matrix4x4> BoneWorld;
+
     public Matrix4x4 World;
     public bool Visible;
 
@@ -87,10 +91,12 @@ public sealed partial class BoneDisplayOperation : Operation<BoneDisplayInput, B
         }
 
         var world = input.World;
+        var posed = input.BoneWorld.Span;
         var joints = new Vector3[skeleton.Count];
         for (var i = 0; i < joints.Length; i++)
         {
-            joints[i] = Vector3.Transform(skeleton.WorldRest[i].Translation, world);
+            var bone = posed.Length == joints.Length ? posed[i] : skeleton.WorldRest[i];
+            joints[i] = Vector3.Transform(bone.Translation, world);
         }
         var bounds = BoundingBox.FromPoints(joints);
         var extent = MathF.Max(bounds.Size.X, MathF.Max(bounds.Size.Y, bounds.Size.Z));

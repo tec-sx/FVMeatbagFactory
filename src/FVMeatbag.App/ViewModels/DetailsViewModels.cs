@@ -1,8 +1,11 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Numerics;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using FVMeatbag.Core.Import;
 using FVMeatbag.Core.Project;
 using FVMeatbag.Graph;
 using FVMeatbag.Scene;
@@ -126,6 +129,7 @@ public sealed partial class SkeletonDetailsViewModel : DetailsViewModel, IDispos
         UpdateBoneColors();
         SyncFromSkeleton();
         skeleton.SelectedBoneChanged += OnSelectedBoneChanged;
+        skeleton.Pose.Changed += OnPoseChanged;
     }
 
     public override string Title => $"Skeleton of {_skeleton.Parent?.Name}";
@@ -152,7 +156,7 @@ public sealed partial class SkeletonDetailsViewModel : DetailsViewModel, IDispos
     }
 
     /// <summary>Choices for <see cref="ColorModeIndex"/>, in <see cref="BoneColorMode"/> order.</summary>
-    public IReadOnlyList<string> ColorModes { get; } = ["By side (L blue, R red, center yellow)", "Maya default (all blue)"];
+    public IReadOnlyList<string> ColorModes { get; } = ["By side", "Default"];
 
     public int ColorModeIndex
     {
@@ -178,17 +182,44 @@ public sealed partial class SkeletonDetailsViewModel : DetailsViewModel, IDispos
             var bone = _skeleton.Skeleton.Bones[index];
             var parent = bone.Parent >= 0 ? _skeleton.Skeleton.Bones[bone.Parent].Name : "none (root)";
             var children = _skeleton.Skeleton.ChildrenOf(index).Count();
-            return $"{bone.Name}\nParent: {parent}\nChildren: {children}\nSide: {BoneDisplayOperation.SideOf(bone.Name)}";
+            var pose = _skeleton.Pose[index];
+            var rest = _skeleton.Pose.Rest[index];
+            // Like Maya's joint orient, the rest rotation is factored out so a bone at rest reads 0, 0, 0
+            // and turning it about its own Z changes only Z: local = delta, then rest (row vectors).
+            var rotate = BoneTransform.EulerDegrees(Quaternion.Concatenate(pose.Rotation, Quaternion.Inverse(rest.Rotation)));
+            return $"{bone.Name}\nParent: {parent}\nChildren: {children}\nSide: {BoneDisplayOperation.SideOf(bone.Name)}\n"
+                + $"Translate {Format(pose.Translation)}\nRotate {Format(rotate, 1)}°\nScale {Format(pose.Scale)}"
+                + (_skeleton.Pose.IsPosed(index) ? "\nPosed" : "\nAt rest");
         },
         () => "No bone selected. Click a joint in the viewport or a bone in the tree.");
+
+    public bool IsPosed => !_skeleton.Pose.IsRest;
 
     [RelayCommand]
     private void ClearSelection() => _skeleton.SelectedBone = Maybe<int>.None;
 
+    /// <summary>Puts the selected bone back into its rest transform.</summary>
+    [RelayCommand]
+    private void ResetBone()
+    {
+        if (_skeleton.SelectedBone.TryGetValue(out var bone))
+        {
+            _skeleton.Pose.ResetBone(bone);
+        }
+    }
+
+    /// <summary>Puts every bone back into its rest transform.</summary>
+    [RelayCommand]
+    private void ResetPose() => _skeleton.Pose.Reset();
+
     [RelayCommand]
     private void ResetBoneSize() => BoneSize = 1;
 
-    public void Dispose() => _skeleton.SelectedBoneChanged -= OnSelectedBoneChanged;
+    public void Dispose()
+    {
+        _skeleton.SelectedBoneChanged -= OnSelectedBoneChanged;
+        _skeleton.Pose.Changed -= OnPoseChanged;
+    }
 
     partial void OnSelectedBoneChanged(BoneNodeViewModel? value)
     {
@@ -199,6 +230,20 @@ public sealed partial class SkeletonDetailsViewModel : DetailsViewModel, IDispos
     }
 
     private void OnSelectedBoneChanged(object? sender, EventArgs e) => SyncFromSkeleton();
+
+    private void OnPoseChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(SelectedBoneInfo));
+        OnPropertyChanged(nameof(IsPosed));
+    }
+
+    /// <summary>Formats with <paramref name="decimals"/> digits, without printing "-0" for tiny negatives.</summary>
+    private static string Format(Vector3 v, int decimals = 3) =>
+        string.Join(", ", new[] { v.X, v.Y, v.Z }.Select(f =>
+        {
+            var rounded = MathF.Round(f, decimals);
+            return (rounded == 0f ? 0f : rounded).ToString(CultureInfo.CurrentCulture);
+        }));
 
     /// <summary>Mirrors the skeleton's selection into the tree, expanding the bone's ancestors so it is visible.</summary>
     private void SyncFromSkeleton()

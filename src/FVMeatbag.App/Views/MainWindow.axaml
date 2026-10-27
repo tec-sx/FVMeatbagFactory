@@ -5,6 +5,7 @@
         xmlns:vm="using:FVMeatbag.App.ViewModels"
         xmlns:views="using:FVMeatbag.App.Views"
         xmlns:rendering="using:FVMeatbag.Rendering"
+        xmlns:tools="using:FVMeatbag.Scene.Tools"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="FVMeatbag.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
@@ -35,6 +36,10 @@
     <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenProjectCommand}" />
     <KeyBinding Gesture="Ctrl+I" Command="{Binding ImportMeshCommand}" />
     <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+    <KeyBinding Gesture="Q" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static tools:TransformTool.Select}" />
+    <KeyBinding Gesture="W" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static tools:TransformTool.Move}" />
+    <KeyBinding Gesture="E" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static tools:TransformTool.Rotate}" />
+    <KeyBinding Gesture="R" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static tools:TransformTool.Scale}" />
     <KeyBinding Gesture="D4" Command="{Binding SetDisplayModeCommand}" CommandParameter="{x:Static rendering:MeshDisplayMode.Wireframe}" />
     <KeyBinding Gesture="D5" Command="{Binding SetDisplayModeCommand}" CommandParameter="{x:Static rendering:MeshDisplayMode.Solid}" />
     <KeyBinding Gesture="D6" Command="{Binding SetDisplayModeCommand}" CommandParameter="{x:Static rendering:MeshDisplayMode.SolidWireframe}" />
@@ -112,7 +117,29 @@
         </Border>
         <Panel>
           <views:ViewportControl Host="{Binding Host}" DisplayMode="{Binding DisplayMode}" />
-          <TextBlock Text="Click: select bone · Drag: orbit · Right drag / Shift+drag: pan · Wheel: zoom · F: frame"
+          <!-- Tool overlay, Maya's toolbox: select, move, rotate, scale (Q, W, E, R). -->
+          <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" Padding="3"
+                  Background="#D02A2A2E" CornerRadius="4">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <RadioButton Classes="tool" Theme="{StaticResource {x:Type ToggleButton}}" GroupName="Tool"
+                           IsChecked="{Binding IsSelectTool}" ToolTip.Tip="Select (Q)">
+                <PathIcon Data="{StaticResource Icon.SelectTool}" />
+              </RadioButton>
+              <RadioButton Classes="tool" Theme="{StaticResource {x:Type ToggleButton}}" GroupName="Tool"
+                           IsChecked="{Binding IsMoveTool}" ToolTip.Tip="Move (W)">
+                <PathIcon Data="{StaticResource Icon.MoveTool}" />
+              </RadioButton>
+              <RadioButton Classes="tool" Theme="{StaticResource {x:Type ToggleButton}}" GroupName="Tool"
+                           IsChecked="{Binding IsRotateTool}" ToolTip.Tip="Rotate (E)">
+                <PathIcon Data="{StaticResource Icon.RotateTool}" />
+              </RadioButton>
+              <RadioButton Classes="tool" Theme="{StaticResource {x:Type ToggleButton}}" GroupName="Tool"
+                           IsChecked="{Binding IsScaleTool}" ToolTip.Tip="Scale (R)">
+                <PathIcon Data="{StaticResource Icon.ScaleTool}" />
+              </RadioButton>
+            </StackPanel>
+          </Border>
+          <TextBlock Text="Click: select bone · Q W E R: select, move, rotate, scale · Drag: orbit · Right drag / Shift+drag: pan · Wheel: zoom · F: frame"
                      HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8"
                      FontSize="11" Opacity="0.45" IsHitTestVisible="False" />
         </Panel>
@@ -195,7 +222,13 @@
                     </TreeView.Styles>
                   </TreeView>
                 </Border>
-                <TextBlock Grid.Row="3" Text="{Binding SelectedBoneInfo}" TextWrapping="Wrap" Margin="0,8,0,0" Opacity="0.85" />
+                <StackPanel Grid.Row="3" Spacing="6" Margin="0,8,0,0">
+                  <TextBlock Text="{Binding SelectedBoneInfo}" TextWrapping="Wrap" Opacity="0.85" />
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Button Content="Reset bone" Command="{Binding ResetBoneCommand}" Padding="8,2" />
+                    <Button Content="Reset pose" Command="{Binding ResetPoseCommand}" IsEnabled="{Binding IsPosed}" Padding="8,2" />
+                  </StackPanel>
+                </StackPanel>
               </Grid>
             </DataTemplate>
           </ContentControl.DataTemplates>

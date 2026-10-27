@@ -26,25 +26,26 @@ public sealed class ProjectWorkspace(string root)
     }
 
     /// <summary>
-    /// Creates the projects folder and the demo project if they are missing, copying
-    /// <paramref name="demoMeshes"/> into the new demo project and starting its camera at
-    /// <paramref name="demoCamera"/>. An existing demo project is left alone. Returns the demo
-    /// project's folder.
+    /// Creates the projects folder and the demo project if they are missing and returns the demo
+    /// project's folder. <paramref name="demoTemplate"/> is a saved project folder (the app ships
+    /// one with the sample character) that is copied in as the demo. An existing demo project is
+    /// left alone, unless it has no meshes and a template is given: then it is filled from the
+    /// template, which upgrades an empty demo made by an earlier build.
     /// </summary>
-    public string EnsureCreated(IEnumerable<string>? demoMeshes = null, Maybe<OrbitCameraSettings> demoCamera = default)
+    public string EnsureCreated(Maybe<string> demoTemplate = default)
     {
         Directory.CreateDirectory(Root);
-        if (!ProjectFile.Exists(DemoDirectory))
+        var exists = ProjectFile.Exists(DemoDirectory);
+        if (demoTemplate.TryGetValue(out var template) && ProjectFile.Exists(template))
         {
-            var demo = new CharacterProject(DemoProjectName, DemoDirectory)
+            if (!exists || !ProjectFile.HasMeshes(DemoDirectory))
             {
-                Camera = demoCamera.OrDefault(OrbitCameraSettings.Default),
-            };
-            foreach (var mesh in demoMeshes ?? [])
-            {
-                demo.Meshes.Add(new SkeletalMeshAsset(Path.GetFileNameWithoutExtension(mesh), ProjectFile.CopyIntoProject(demo, mesh)));
+                CopyFolder(template, DemoDirectory);
             }
-            ProjectFile.Save(demo);
+        }
+        else if (!exists)
+        {
+            ProjectFile.Save(new CharacterProject(DemoProjectName, DemoDirectory));
         }
         return DemoDirectory;
     }
@@ -64,5 +65,19 @@ public sealed class ProjectWorkspace(string root)
             directory = Path.Combine(Root, $"{safe} {i}");
         }
         return directory;
+    }
+
+    /// <summary>Copies a folder's files and subfolders, replacing files that already exist.</summary>
+    private static void CopyFolder(string source, string target)
+    {
+        foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
+        {
+            Directory.CreateDirectory(Path.Combine(target, Path.GetRelativePath(source, directory)));
+        }
+        Directory.CreateDirectory(target);
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            File.Copy(file, Path.Combine(target, Path.GetRelativePath(source, file)), overwrite: true);
+        }
     }
 }

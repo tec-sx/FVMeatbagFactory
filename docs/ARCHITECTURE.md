@@ -128,21 +128,24 @@ direction to the light and radiance), so the viewport redraws through the same c
 as everything else. Their settings belong to the project and are saved with it.
 
 The camera orbits a target point (yaw, pitch, distance) and pans by moving that point across the
-view plane. Viewport controls: left or middle drag orbits, right drag or Shift+drag pans, the wheel
-zooms, F frames the scene.
+view plane. Viewport controls: a click selects a bone, left drag on a gizmo handle poses the
+selected bone, left or middle drag elsewhere orbits, right drag or Shift+drag pans, the wheel
+zooms, F frames the scene; Q, W, E, R pick the select, move, rotate and scale tools.
 
 ### Projects on disk
 
 ```
 Documents/Projects/            ← ProjectWorkspace, created on first run like an installer would
-└── Demo/                      ← created on first run and opened at startup
-    ├── project.json           ← name, camera, light, mesh list (paths relative to the folder)
+└── Demo/                      ← installed on first run from assets/Samples/Demo and opened at startup
+    ├── project.json           ← name, camera, light, mesh list (paths relative to the folder), poses
     └── Meshes/
-        └── MaleBaseMesh.glb   ← the sample character (CC0, assets/Samples), copied in on creation;
-                                 imported files are copied here too, so the folder is self-contained
+        └── MaleBaseMesh.glb   ← the sample character (CC0); imported files are copied here too,
+                                 so the folder is self-contained
 ```
 
-`ProjectFile` saves and opens this layout. A mesh whose file is missing stays in the project with
+The Demo is a saved project in the repository (`assets/Samples/Demo`) that the first run copies
+in. An empty Demo left by an earlier build is filled from it too; any other existing Demo is
+left alone. `ProjectFile` saves and opens this layout. A mesh whose file is missing stays in the project with
 no geometry and is reported instead of failing the whole project. New projects get their own
 folder next to Demo.
 
@@ -189,7 +192,22 @@ three-circle wire sphere per joint (radius from the skeleton's extent × bone si
 four-sided pyramid to each child, colored by side from the bone name (`.L`/`_L`/`L_`/"left",
 and the same for right) or uniformly, with the selected bone in Maya's selection green. The
 component holds the bone selection; `BonePicker` maps a viewport click to a joint (projected
-sphere plus a few pixels of slack) or, failing that, to the bone segment's parent joint. Add mesh to project copies the source file into the project's
+sphere plus a few pixels of slack) or, failing that, to the bone segment's parent joint.
+
+Posing: the pose is document data, a `SkeletonPose` on the mesh asset (each bone's translation,
+rotation and scale relative to its parent, starting at rest), saved in `project.json` for posed
+bones only. The `SkeletonComponent` graph is pose → bone display and pose → skinning:
+`PoseOperation` turns the pose (compared by version) into model-space bone transforms and
+skinning matrices, and `SkinningOperation` deforms the mesh on the CPU with linear blend
+skinning (passing the imported arrays through at rest); the viewport draws its output. The
+`BoneManipulator` on the scene holds the current tool (select, move, rotate, scale) and the
+gizmo for the selected bone: it draws the handles as overlay lines at a fixed size on screen,
+hit-tests them in screen space and turns drags into pose edits relative to the bone's
+transform when the drag began. Move works along world axes (closest point between the pointer
+ray and the axis) or in the view plane, rotate about the bone's own axes or the view axis (drag
+along the ring's screen tangent), scale along the bone's own axes or evenly.
+
+Add mesh to project copies the source file into the project's
 `Meshes` folder. Add to scene places the mesh so its bounds are centered on the origin and frames
 the camera on it.
 

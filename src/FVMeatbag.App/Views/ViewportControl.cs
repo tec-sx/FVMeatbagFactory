@@ -8,6 +8,8 @@ using Avalonia.Platform;
 using FVMeatbag.Graph;
 using FVMeatbag.Rendering;
 using FVMeatbag.Scene;
+using FVMeatbag.Scene.Components;
+using FVMeatbag.Scene.Tools;
 using LineSegment = FVMeatbag.Rendering.LineSegment;
 
 namespace FVMeatbag.App.Views;
@@ -20,8 +22,9 @@ namespace FVMeatbag.App.Views;
 /// (presentation step 1 in docs/ARCHITECTURE.md). A frame is only rendered when the graph changed
 /// or the control was resized.
 /// <para>
-/// Mouse: a left click selects the bone under the cursor (or clears the bone selection), left or
-/// middle drag orbits, right drag or Shift+drag pans, the wheel zooms, F frames the scene.
+/// Mouse: a left click selects the bone under the cursor (or clears the bone selection), left
+/// drag on a gizmo handle moves, rotates or scales the selected bone, left or middle drag
+/// elsewhere orbits, right drag or Shift+drag pans, the wheel zooms, F frames the scene.
 /// </para>
 /// </remarks>
 [SuppressMessage("Design", "CA1001", Justification = "The bitmap is released when the control leaves the visual tree, which is the lifetime Avalonia gives controls.")]
@@ -46,6 +49,7 @@ public sealed class ViewportControl : Control
     private Point _pressPointer;
     private bool _dragging;
     private bool _clickCandidate;
+    private bool _gizmoDragging;
 
     public ViewportControl()
     {
@@ -93,10 +97,12 @@ public sealed class ViewportControl : Control
             if (change.OldValue is AppHost oldHost)
             {
                 oldHost.GraphEvaluated -= OnGraphEvaluated;
+                oldHost.Scene.Manipulator.Changed -= OnManipulatorChanged;
             }
             if (change.NewValue is AppHost newHost)
             {
                 newHost.GraphEvaluated += OnGraphEvaluated;
+                newHost.Scene.Manipulator.Changed += OnManipulatorChanged;
                 UpdateAspectRatio();
             }
             RequestFrame();
@@ -119,6 +125,15 @@ public sealed class ViewportControl : Control
         Focus();
         _lastPointer = e.GetPosition(this);
         _pressPointer = _lastPointer;
+        var left = e.GetCurrentPoint(this).Properties.IsLeftButtonPressed;
+        if (left && !e.KeyModifiers.HasFlag(KeyModifiers.Shift) && Host?.Scene is { } scene && ToolCamera(scene) is { } camera
+            && scene.Manipulator.BeginDrag(camera, ToVector(_lastPointer)))
+        {
+            _gizmoDragging = true;
+            e.Pointer.Capture(this);
+            e.Handled = true;
+            return;
+        }
         _clickCandidate = e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && !e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         _dragging = true;
         e.Pointer.Capture(this);
@@ -129,8 +144,14 @@ public sealed class ViewportControl : Control
     {
         ArgumentNullException.ThrowIfNull(e);
         base.OnPointerReleased(e);
-        _dragging = false;
         e.Pointer.Capture(null);
+        if (_gizmoDragging)
+        {
+            _gizmoDragging = false;
+            Host?.Scene.Manipulator.EndDrag();
+            return;
+        }
+        _dragging = false;
         if (_clickCandidate && e.InitialPressMouseButton == MouseButton.Left)
         {
             PickBone(e.GetPosition(this));
@@ -142,11 +163,29 @@ public sealed class ViewportControl : Control
     {
         ArgumentNullException.ThrowIfNull(e);
         base.OnPointerMoved(e);
-        if (!_dragging || Host?.Scene.Camera is not { } camera)
+        if (Host?.Scene is not { } scene)
         {
             return;
         }
         var position = e.GetPosition(this);
+        if (_gizmoDragging)
+        {
+            if (ToolCamera(scene) is { } toolCamera)
+            {
+                scene.Manipulator.Drag(toolCamera, ToVector(position));
+            }
+            e.Handled = true;
+            return;
+        }
+        if (!_dragging)
+        {
+            if (ToolCamera(scene) is { } hoverCamera)
+            {
+                scene.Manipulator.UpdateHover(hoverCamera, ToVector(position));
+            }
+            return;
+        }
+        var camera = scene.Camera;
         var delta = position - _lastPointer;
         _lastPointer = position;
         var moved = position - _pressPointer;
@@ -168,6 +207,17 @@ public sealed class ViewportControl : Control
             camera.Orbit(-(float)delta.X * OrbitDegreesPerPixel, (float)delta.Y * OrbitDegreesPerPixel);
         }
         e.Handled = true;
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+        if (_gizmoDragging)
+        {
+            _gizmoDragging = false;
+            Host?.Scene.Manipulator.EndDrag();
+        }
+        _dragging = false;
     }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
@@ -198,6 +248,21 @@ public sealed class ViewportControl : Control
 
     private void OnGraphEvaluated(object? sender, int evaluated) => RequestFrame();
 
+    private void OnManipulatorChanged(object? sender, EventArgs e) => RequestFrame();
+
+    private static System.Numerics.Vector2 ToVector(Point point) => new((float)point.X, (float)point.Y);
+
+    /// <summary>The camera as tools see it, in the control's own units (the same as pointer positions).</summary>
+    private ViewportCamera? ToolCamera(SceneRoot scene)
+    {
+        if (Bounds.Width <= 0 || Bounds.Height <= 0 || scene.Camera.CameraNode is not { } node)
+        {
+            return null;
+        }
+        var camera = node.OutputValues;
+        return new ViewportCamera(camera.View, camera.Projection, camera.Eye, new System.Numerics.Vector2((float)Bounds.Width, (float)Bounds.Height));
+    }
+
     /// <summary>Selects the bone under <paramref name="point"/>, or clears the bone selection when there is none.</summary>
     private void PickBone(Point point)
     {
@@ -207,7 +272,7 @@ public sealed class ViewportControl : Control
         }
         var camera = scene.Camera.CameraNode!.OutputValues;
         var size = new System.Numerics.Vector2((float)Bounds.Width, (float)Bounds.Height);
-        var pick = BonePicker.Pick(scene, camera.View * camera.Projection, size, new System.Numerics.Vector2((float)point.X, (float)point.Y));
+        var pick = BonePicker.Pick(scene, camera.View * camera.Projection, size, ToVector(point));
         foreach (var skeleton in scene.Skeletons)
         {
             if (!pick.TryGetValue(out var hit) || hit.Skeleton != skeleton)
@@ -261,7 +326,7 @@ public sealed class ViewportControl : Control
             {
                 renderer.Initialize();
             }
-            renderer.RenderFrame(BuildFrame(host.Scene, (uint)width, (uint)height), BuildDraws(host.Scene), BuildLines(host.Scene));
+            renderer.RenderFrame(BuildFrame(host.Scene, (uint)width, (uint)height), BuildDraws(host.Scene), BuildLines(host.Scene, ToolCamera(host.Scene)));
 
             if (_bitmap is null || _bitmap.PixelSize.Width != width || _bitmap.PixelSize.Height != height)
             {
@@ -287,7 +352,7 @@ public sealed class ViewportControl : Control
         return new FrameContext(width, height, camera.View, camera.Projection, light.DirectionToLight, light.Radiance, 0, DisplayMode);
     }
 
-    private static List<LineSegment> BuildLines(SceneRoot scene)
+    private static List<LineSegment> BuildLines(SceneRoot scene, ViewportCamera? camera)
     {
         var lines = new List<LineSegment>();
         foreach (var skeleton in scene.Skeletons)
@@ -301,6 +366,14 @@ public sealed class ViewportControl : Control
                 lines.Add(new LineSegment(line.From, line.To, line.Color));
             }
         }
+        // The gizmo last, so it is drawn over the bones.
+        if (camera is { } toolCamera)
+        {
+            foreach (var line in scene.Manipulator.Lines(toolCamera))
+            {
+                lines.Add(new LineSegment(line.From, line.To, line.Color));
+            }
+        }
         return lines;
     }
 
@@ -309,10 +382,16 @@ public sealed class ViewportControl : Control
         var draws = new List<MeshDraw>();
         foreach (var mesh in scene.Meshes)
         {
-            if (scene.FindAsset(mesh).TryGetValue(out var asset) && asset.Geometry.TryGetValue(out var geometry))
+            if (!scene.FindAsset(mesh).TryGetValue(out var asset) || !asset.Geometry.TryGetValue(out var geometry))
             {
-                draws.Add(new MeshDraw(new RenderMesh(asset.Id, asset.Version, geometry.Positions, geometry.Normals, geometry.Indices), mesh.WorldMatrix));
+                continue;
             }
+            // Rigged meshes are drawn as posed by their skeleton's skinning node.
+            var skinned = mesh.Children.OfType<SkeletonComponent>().FirstOrDefault()?.SkinningNode?.OutputValues;
+            var render = skinned is { Positions.IsEmpty: false } posed
+                ? new RenderMesh(asset.Id, posed.Version, posed.Positions, posed.Normals, geometry.Indices)
+                : new RenderMesh(asset.Id, asset.Version, geometry.Positions, geometry.Normals, geometry.Indices);
+            draws.Add(new MeshDraw(render, mesh.WorldMatrix));
         }
         return draws;
     }

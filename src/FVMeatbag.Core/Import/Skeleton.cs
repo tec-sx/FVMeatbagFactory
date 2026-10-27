@@ -15,7 +15,7 @@ public sealed record Bone(string Name, int Parent, Matrix4x4 LocalRest);
 /// <remarks>
 /// Mesh vertices are stored already deformed into this rest pose, so the bind pose is the rest
 /// pose: skinning with <see cref="InverseBind"/> and the rest world matrices gives the mesh back
-/// unchanged. Poses will be expressed as changes to <see cref="Bone.LocalRest"/>.
+/// unchanged. A <see cref="SkeletonPose"/> holds a pose as each bone's transform relative to its parent.
 /// </remarks>
 public sealed class Skeleton
 {

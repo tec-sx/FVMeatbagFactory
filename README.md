@@ -22,8 +22,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design.
 
 ## Using it
 
-On first start the app creates `Documents/Projects/Demo` with a rigged sample character
-([3D Male Base Mesh](assets/Samples/MaleBaseMesh/README.md), CC0) and opens it. Every project has one
+On first start the app installs the saved Demo project ([assets/Samples/Demo](assets/Samples/Demo/README.md))
+as `Documents/Projects/Demo`, with a rigged sample character (3D Male Base Mesh, CC0), and opens it. Every project has one
 camera and one light; select them in the outliner to adjust them.
 
 - **File → Import Mesh** (Ctrl+I) loads a `.glb`/`.gltf` into the open project and places it at
@@ -33,14 +33,22 @@ camera and one light; select them in the outliner to adjust them.
   `Meshes` folder.
 - Rigged glTF files keep their skeleton and skin weights. Bones are drawn Maya style: a wire
   sphere on each joint and a pyramid to each child, colored by side (left blue, right red,
-  center yellow) or all in Maya's default blue; the selected bone turns green.
+  center yellow) or all in Maya's default blue (the **Bone colors** options "By side" and
+  "Default"); the selected bone turns green.
 - Click a joint or bone in the viewport, or a bone in the skeleton's tree in **Details**, to
   select it; the other view follows. Details also has the bone size and color settings.
 - The viewport's top bar switches between wireframe, solid, solid + wireframe and shaded
   (keys 4 to 7, as in Maya; shaded is a placeholder that draws like solid until materials
   exist), shows or hides bones, and frames the scene.
-- Viewport: click to select a bone, drag to orbit, right drag or Shift+drag to pan, wheel to
-  zoom, F to frame.
+- **Posing.** The tool overlay under the top bar picks select, move, rotate or scale (Q, W, E,
+  R). With a bone selected, drag a gizmo handle: move arrows go along world axes and the
+  square moves in the view plane; rotate rings turn about the bone's own axes and the outer
+  ring about the view; scale handles stretch along the bone's axes and the center cube scales
+  evenly. The mesh follows the bones (linear blend skinning). Details shows the bone's
+  translate, rotate (relative to rest, like Maya's joint orient) and scale, with **Reset bone**
+  and **Reset pose**. Poses are saved with the project.
+- Viewport: click to select a bone, drag empty space to orbit, right drag or Shift+drag to pan,
+  wheel to zoom, F to frame.
 
 The viewport needs a GPU driver with Vulkan 1.2. Third-party assets are listed in
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
