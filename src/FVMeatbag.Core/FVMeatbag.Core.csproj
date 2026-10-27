@@ -2,9 +2,15 @@
   <!-- Document model: the project hierarchy that holds the actual data (meshes, skeletons, morphs, poses). -->
   <PropertyGroup>
     <RootNamespace>FVMeatbag.Core</RootNamespace>
+    <!-- The FBX importer reads Assimp's native scene directly. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <!-- For shared primitives such as Maybe<T>; the graph library itself has no dependencies. -->
     <ProjectReference Include="..\FVMeatbag.Graph\FVMeatbag.Graph.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="SharpGLTF.Core" />
+    <PackageReference Include="Silk.NET.Assimp" />
   </ItemGroup>
 </Project>

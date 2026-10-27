@@ -10,6 +10,13 @@
     <PackageReference Include="Silk.NET.Vulkan.Extensions.EXT" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Compiled from the .vert/.frag sources next to them; see Shaders/README.md. -->
+    <EmbeddedResource Include="Shaders\*.spv" LogicalName="FVMeatbag.Rendering.Vulkan.Shaders.%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="FVMeatbag.Rendering.Vulkan.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\FVMeatbag.Rendering\FVMeatbag.Rendering.csproj" />
   </ItemGroup>
 </Project>

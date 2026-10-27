@@ -118,6 +118,37 @@ Root graph "App"
   target's world output. Moving the target moves the gizmo through the graph. Move/rotate/scale
   interaction will be nodes in the gizmo's graph. Changing selection removes the gizmo graph.
 
+### Camera and light
+
+Every scene has exactly one `OrbitCameraComponent` and one `DirectionalLightComponent`, created by
+`SceneRoot`. The app is about the character, not staging, so they are adjusted but never added or
+removed (`SceneComponent.IsRemovable` is false and their constructors are internal). Each owns a
+node in its graph that turns settings into what the renderer needs (view/projection matrices,
+direction to the light and radiance), so the viewport redraws through the same change propagation
+as everything else. Their settings belong to the project and are saved with it.
+
+The camera orbits a target point (yaw, pitch, distance) and pans by moving that point across the
+view plane. Viewport controls: a click selects a bone, left drag on a gizmo handle poses the
+selected bone, left or middle drag elsewhere orbits, right drag or Shift+drag pans, the wheel
+zooms, F frames the scene; Q, W, E, R pick the select, move, rotate and scale tools.
+
+### Projects on disk
+
+```
+Documents/Projects/            ← ProjectWorkspace, created on first run like an installer would
+└── Demo/                      ← installed on first run from assets/Samples/Demo and opened at startup
+    ├── project.json           ← name, camera, light, mesh list (paths relative to the folder), poses
+    └── Meshes/
+        └── MaleBaseMesh.glb   ← the sample character (CC0); imported files are copied here too,
+                                 so the folder is self-contained
+```
+
+The Demo is a saved project in the repository (`assets/Samples/Demo`) that the first run copies
+in. An empty Demo left by an earlier build is filled from it too; any other existing Demo is
+left alone. `ProjectFile` saves and opens this layout. A mesh whose file is missing stays in the project with
+no geometry and is reported instead of failing the whole project. New projects get their own
+folder next to Demo.
+
 ### Data wires and execution wires
 
 The graph has two kinds of wire (decided 2026-10-27):
@@ -139,15 +170,58 @@ inputs, including results of earlier steps. Its changed data outputs then propag
 - An exec output leads to one input; an input accepts many. Exec loops are allowed (state
   machines) and runaway loops are stopped by `MaxEvaluationsPerPass`.
 
-`NewCharacterWorkflow` is the first real chain and backs **File → New Project** in the app:
+Two chains back the File menu, built from the same action nodes:
 
 ```
-[Load mesh] ──exec──▶ [Create project] ──exec──▶ [Add to scene]
-     Mesh ───data───▶ Mesh       BaseMesh ──data──▶ Asset
+New Project from Mesh (NewCharacterWorkflow)
+[Load mesh] ─▶ [Create project] ─▶ [Add mesh to project] ─▶ [Add to scene] ─▶ [Save project]
+
+Import Mesh (ImportMeshWorkflow)
+[Load mesh] ─▶ [Add mesh to project] ─▶ [Add to scene]
 ```
 
-Load mesh only records the file name and path for now; the real importer slots in later without
-changing the chain.
+Load mesh picks the reader by extension (`MeshImporter`): glTF 2.0 (.glb/.gltf) with SharpGLTF,
+FBX with the native Assimp library (Silk.NET.Assimp). Either way it bakes every mesh in the file into one
+`MeshGeometry` (positions, normals, indices) in world space. Skinned meshes are deformed into the
+rest pose the file shows (joint world × inverse bind, so armature transforms are honored); all
+their joints become one `Skeleton` (bones ordered parents first, rest transforms, inverse bind =
+inverse rest) and each vertex keeps up to four normalized `SkinWeights`. Because the stored mesh
+is already in the rest pose, bind pose = rest pose, which keeps later posing and weight editing
+simple. A rigged mesh gets a `SkeletonComponent` child in the scene. Its `BoneDisplayOperation`
+node turns the bones into Maya-style overlay lines that follow the mesh's transform: a
+three-circle wire sphere per joint (radius from the skeleton's extent × bone size) and a
+four-sided pyramid to each child, colored by side from the bone name (`.L`/`_L`/`L_`/"left",
+and the same for right) or uniformly, with the selected bone in Maya's selection green. The
+component holds the bone selection; `BonePicker` maps a viewport click to a joint (projected
+sphere plus a few pixels of slack) or, failing that, to the bone segment's parent joint.
+
+FBX specifics (`FbxImporter`): Assimp applies the file's axis system but not its units, so the
+scene is scaled to meters from the UnitScaleFactor metadata (centimeters per unit; Blender's
+default export stores 1 and puts a ×100 on the objects instead, "FBX All" stores 100). FBX does
+not mark joints, so the skeleton is every bone that weights a vertex, every node between two of
+them, and every mesh-free node below one (end joints such as Blender's `_end` leaf bones).
+Blender writes bind matrices without the mesh object's transform, which Assimp does not expect,
+so the importer tries the mesh's own space, its local transform and its transform below the
+root, and keeps the one that leaves the skinned mesh where its node puts it. The Blender exports
+of the Demo character in `tests/FVMeatbag.Scene.Tests/Fixtures` (default, Z-up with "FBX All"
+scale, and a posed rig with the mesh parented to a moved armature) all import as Blender shows them.
+
+Posing: the pose is document data, a `SkeletonPose` on the mesh asset (each bone's translation,
+rotation and scale relative to its parent, starting at rest), saved in `project.json` for posed
+bones only. The `SkeletonComponent` graph is pose → bone display and pose → skinning:
+`PoseOperation` turns the pose (compared by version) into model-space bone transforms and
+skinning matrices, and `SkinningOperation` deforms the mesh on the CPU with linear blend
+skinning (passing the imported arrays through at rest); the viewport draws its output. The
+`BoneManipulator` on the scene holds the current tool (select, move, rotate, scale) and the
+gizmo for the selected bone: it draws the handles as overlay lines at a fixed size on screen,
+hit-tests them in screen space and turns drags into pose edits relative to the bone's
+transform when the drag began. Move works along world axes (closest point between the pointer
+ray and the axis) or in the view plane, rotate about the bone's own axes or the view axis (drag
+along the ring's screen tangent), scale along the bone's own axes or evenly.
+
+Add mesh to project copies the source file into the project's
+`Meshes` folder. Add to scene places the mesh so its bounds are centered on the origin and frames
+the camera on it.
 
 Undo/redo should live at the graph-edit level (input changes, connect, add/remove) as commands.
 **Open.**
@@ -189,8 +263,24 @@ is the common subset of all three:
 | Output | Linear HDR → filmic/ACES tonemap | Match UE's default for look parity |
 
 Coordinate systems differ: glTF is right-handed Y-up meters, Blender right-handed Z-up meters,
-UE left-handed Z-up centimeters. **Open:** pick the internal convention (recommendation: glTF's,
-converting only at the import/export and UE bridge boundaries).
+UE left-handed Z-up centimeters. The internal convention is glTF's (decided with the first demo
+scene); conversions happen only at the import/export and UE bridge boundaries. Blender's glTF
+exporter already converts to +Y up, and models face +Z, which is where the default camera sits.
+
+### Current renderer
+
+The first renderer draws untextured "clay": per-vertex normals, one directional light (Lambert)
+and a sky/ground hemisphere ambient, no materials. It renders offscreen with 4x MSAA where
+supported, resolves into a BGRA8 image and copies it into a host-visible buffer that the
+viewport control copies into a `WriteableBitmap` (step 1 above). Frames are only rendered when
+the graph changed or the viewport resized. Back faces are lit too, since imported meshes are not
+always closed. The display modes (wireframe, solid, solid + wireframe, shaded) are a
+`FrameContext` field: wireframe redraws the meshes with polygon mode Line, depth tested
+against the solid pass but not written (so wireframe-only shows hidden edges) with a small depth
+bias; it needs the `fillModeNonSolid` device feature and falls back to solid without it. Shaded
+draws like solid until materials exist. Overlay lines (bones) are drawn last without depth testing. Shaders live in `src/FVMeatbag.Rendering.Vulkan/Shaders` as GLSL with committed
+SPIR-V. Offscreen tests render real frames on any Vulkan driver, including Mesa's software
+lavapipe, and skip when there is none.
 
 Skin will eventually want subsurface scattering (UE Subsurface Profile / Substrate); that is an
 extension on top of the base model, not a replacement.

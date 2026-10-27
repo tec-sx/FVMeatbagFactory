@@ -3,23 +3,70 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:FVMeatbag.App.ViewModels"
+        xmlns:views="using:FVMeatbag.App.Views"
+        xmlns:rendering="using:FVMeatbag.Rendering"
+        xmlns:tools="using:FVMeatbag.Scene.Tools"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="FVMeatbag.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="FV Meatbag Factory"
         Width="1280" Height="800">
+  <Window.Styles>
+    <Style Selector="RadioButton.tool, ToggleButton.tool, Button.tool">
+      <Setter Property="Width" Value="34" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="RadioButton.tool PathIcon, ToggleButton.tool PathIcon, Button.tool PathIcon">
+      <Setter Property="Width" Value="18" />
+      <Setter Property="Height" Value="18" />
+    </Style>
+    <Style Selector="TextBlock.selectedBone">
+      <!-- Maya's lead-selection green, as in the viewport. -->
+      <Setter Property="Foreground" Value="#42FFA3" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+  </Window.Styles>
+
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Ctrl+N" Command="{Binding NewProjectCommand}" />
+    <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenProjectCommand}" />
+    <KeyBinding Gesture="Ctrl+I" Command="{Binding ImportMeshCommand}" />
+    <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+    <KeyBinding Gesture="Q" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static tools:TransformTool.Select}" />
+    <KeyBinding Gesture="W" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static tools:TransformTool.Move}" />
+    <KeyBinding Gesture="E" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static tools:TransformTool.Rotate}" />
+    <KeyBinding Gesture="R" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static tools:TransformTool.Scale}" />
+    <KeyBinding Gesture="D4" Command="{Binding SetDisplayModeCommand}" CommandParameter="{x:Static rendering:MeshDisplayMode.Wireframe}" />
+    <KeyBinding Gesture="D5" Command="{Binding SetDisplayModeCommand}" CommandParameter="{x:Static rendering:MeshDisplayMode.Solid}" />
+    <KeyBinding Gesture="D6" Command="{Binding SetDisplayModeCommand}" CommandParameter="{x:Static rendering:MeshDisplayMode.SolidWireframe}" />
+    <KeyBinding Gesture="D7" Command="{Binding SetDisplayModeCommand}" CommandParameter="{x:Static rendering:MeshDisplayMode.Shaded}" />
+  </Window.KeyBindings>
+
   <DockPanel>
     <Menu DockPanel.Dock="Top">
       <MenuItem Header="_File">
-        <MenuItem Header="_New Project" Command="{Binding NewProjectCommand}" />
+        <MenuItem Header="_New Project from Mesh…" Command="{Binding NewProjectCommand}" InputGesture="Ctrl+N" />
+        <MenuItem Header="_Open Project…" Command="{Binding OpenProjectCommand}" InputGesture="Ctrl+O" />
+        <Separator />
+        <MenuItem Header="_Import Mesh (.glb, .gltf, .fbx)…" Command="{Binding ImportMeshCommand}" InputGesture="Ctrl+I" />
+        <Separator />
+        <MenuItem Header="_Save" Command="{Binding SaveCommand}" InputGesture="Ctrl+S" />
+      </MenuItem>
+      <MenuItem Header="_View">
+        <MenuItem Header="_Frame All" Command="{Binding FrameAllCommand}" InputGesture="F" />
+        <MenuItem Header="_Reset Camera" Command="{Binding ResetCameraCommand}" />
       </MenuItem>
     </Menu>
 
     <Border DockPanel.Dock="Bottom" Padding="8,4" Background="#1A1A1A">
-      <TextBlock Text="{Binding Status}" FontSize="12" />
+      <TextBlock Text="{Binding Status}" FontSize="12" TextTrimming="CharacterEllipsis" />
     </Border>
 
-    <Grid ColumnDefinitions="260,4,*,4,300">
+    <Grid ColumnDefinitions="260,4,*,4,320">
       <DockPanel Grid.Column="0">
         <TextBlock DockPanel.Dock="Top" Text="Outliner" Margin="8" FontWeight="SemiBold" />
         <TreeView ItemsSource="{Binding Outliner}" SelectedItem="{Binding SelectedComponent}">
@@ -28,21 +75,164 @@
               <TextBlock Text="{Binding Name}" />
             </TreeDataTemplate>
           </TreeView.ItemTemplate>
+          <TreeView.Styles>
+            <Style Selector="TreeViewItem">
+              <Setter Property="IsExpanded" Value="True" />
+            </Style>
+          </TreeView.Styles>
         </TreeView>
       </DockPanel>
 
       <GridSplitter Grid.Column="1" ResizeDirection="Columns" />
 
-      <!-- The Vulkan viewport control replaces this placeholder in the rendering milestone. -->
-      <Border Grid.Column="2" Background="#202124">
-        <TextBlock Text="Viewport (Vulkan)" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5" />
-      </Border>
+      <DockPanel Grid.Column="2">
+        <!-- Viewport top bar. Display modes act as a radio group. -->
+        <Border DockPanel.Dock="Top" Background="#2A2A2E" Padding="6,3">
+          <StackPanel Orientation="Horizontal" Spacing="2">
+            <RadioButton Classes="tool" Theme="{StaticResource {x:Type ToggleButton}}" GroupName="DisplayMode"
+                         IsChecked="{Binding IsWireframe}" ToolTip.Tip="Wireframe (4)">
+              <PathIcon Data="{StaticResource Icon.Wireframe}" />
+            </RadioButton>
+            <RadioButton Classes="tool" Theme="{StaticResource {x:Type ToggleButton}}" GroupName="DisplayMode"
+                         IsChecked="{Binding IsSolid}" ToolTip.Tip="Solid (5)">
+              <PathIcon Data="{StaticResource Icon.Solid}" />
+            </RadioButton>
+            <RadioButton Classes="tool" Theme="{StaticResource {x:Type ToggleButton}}" GroupName="DisplayMode"
+                         IsChecked="{Binding IsSolidWireframe}" ToolTip.Tip="Solid with wireframe (6)">
+              <PathIcon Data="{StaticResource Icon.SolidWireframe}" />
+            </RadioButton>
+            <RadioButton Classes="tool" Theme="{StaticResource {x:Type ToggleButton}}" GroupName="DisplayMode"
+                         IsChecked="{Binding IsShaded}" ToolTip.Tip="Shaded (7). Placeholder: draws like Solid until materials exist.">
+              <PathIcon Data="{StaticResource Icon.Shaded}" />
+            </RadioButton>
+            <Rectangle Width="1" Margin="6,4" Fill="#505056" />
+            <ToggleButton Classes="tool" IsChecked="{Binding ShowBones}" ToolTip.Tip="Show bones">
+              <PathIcon Data="{StaticResource Icon.Bones}" />
+            </ToggleButton>
+            <Rectangle Width="1" Margin="6,4" Fill="#505056" />
+            <Button Classes="tool" Command="{Binding FrameAllCommand}" ToolTip.Tip="Frame all (F)">
+              <PathIcon Data="{StaticResource Icon.FrameAll}" />
+            </Button>
+          </StackPanel>
+        </Border>
+        <Panel>
+          <views:ViewportControl Host="{Binding Host}" DisplayMode="{Binding DisplayMode}" />
+          <!-- Tool overlay, Maya's toolbox: select, move, rotate, scale (Q, W, E, R). -->
+          <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" Padding="3"
+                  Background="#D02A2A2E" CornerRadius="4">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <RadioButton Classes="tool" Theme="{StaticResource {x:Type ToggleButton}}" GroupName="Tool"
+                           IsChecked="{Binding IsSelectTool}" ToolTip.Tip="Select (Q)">
+                <PathIcon Data="{StaticResource Icon.SelectTool}" />
+              </RadioButton>
+              <RadioButton Classes="tool" Theme="{StaticResource {x:Type ToggleButton}}" GroupName="Tool"
+                           IsChecked="{Binding IsMoveTool}" ToolTip.Tip="Move (W)">
+                <PathIcon Data="{StaticResource Icon.MoveTool}" />
+              </RadioButton>
+              <RadioButton Classes="tool" Theme="{StaticResource {x:Type ToggleButton}}" GroupName="Tool"
+                           IsChecked="{Binding IsRotateTool}" ToolTip.Tip="Rotate (E)">
+                <PathIcon Data="{StaticResource Icon.RotateTool}" />
+              </RadioButton>
+              <RadioButton Classes="tool" Theme="{StaticResource {x:Type ToggleButton}}" GroupName="Tool"
+                           IsChecked="{Binding IsScaleTool}" ToolTip.Tip="Scale (R)">
+                <PathIcon Data="{StaticResource Icon.ScaleTool}" />
+              </RadioButton>
+            </StackPanel>
+          </Border>
+          <TextBlock Text="Click: select bone · Q W E R: select, move, rotate, scale · Drag: orbit · Right drag / Shift+drag: pan · Wheel: zoom · F: frame"
+                     HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8"
+                     FontSize="11" Opacity="0.45" IsHitTestVisible="False" />
+        </Panel>
+      </DockPanel>
 
       <GridSplitter Grid.Column="3" ResizeDirection="Columns" />
 
       <DockPanel Grid.Column="4">
         <TextBlock DockPanel.Dock="Top" Text="Details" Margin="8" FontWeight="SemiBold" />
-        <TextBlock Margin="8" Text="{Binding SelectedComponent.Name, FallbackValue='Nothing selected'}" />
+        <ContentControl Content="{Binding Details}" Margin="8,0">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="vm:CameraDetailsViewModel">
+              <StackPanel Spacing="4">
+                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding Yaw, StringFormat='Yaw {0:0.#}°'}" />
+                <Slider Minimum="-180" Maximum="180" Value="{Binding Yaw}" />
+                <TextBlock Text="{Binding Pitch, StringFormat='Pitch {0:0.#}°'}" />
+                <Slider Minimum="-89" Maximum="89" Value="{Binding Pitch}" />
+                <TextBlock Text="{Binding Distance, StringFormat='Distance {0:0.###}'}" />
+                <Slider Minimum="0.1" Maximum="50" Value="{Binding Distance}" />
+                <TextBlock Text="{Binding FieldOfView, StringFormat='Field of view {0:0}°'}" />
+                <Slider Minimum="10" Maximum="120" Value="{Binding FieldOfView}" />
+                <TextBlock Text="{Binding Target, StringFormat='Orbit point {0}'}" Opacity="0.7" />
+                <Button Content="Reset" Command="{Binding ResetCommand}" Margin="0,8,0,0" />
+              </StackPanel>
+            </DataTemplate>
+            <DataTemplate DataType="vm:LightDetailsViewModel">
+              <StackPanel Spacing="4">
+                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding Azimuth, StringFormat='Azimuth {0:0.#}°'}" />
+                <Slider Minimum="-180" Maximum="180" Value="{Binding Azimuth}" />
+                <TextBlock Text="{Binding Elevation, StringFormat='Elevation {0:0.#}°'}" />
+                <Slider Minimum="-90" Maximum="90" Value="{Binding Elevation}" />
+                <TextBlock Text="{Binding Intensity, StringFormat='Intensity {0:0.##}'}" />
+                <Slider Minimum="0" Maximum="10" Value="{Binding Intensity}" />
+                <Button Content="Reset" Command="{Binding ResetCommand}" Margin="0,8,0,0" />
+              </StackPanel>
+            </DataTemplate>
+            <DataTemplate DataType="vm:MeshDetailsViewModel">
+              <StackPanel Spacing="4">
+                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding Geometry}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Rig}" />
+                <TextBlock Text="{Binding Source, StringFormat='Source {0}'}" TextWrapping="Wrap" Opacity="0.7" />
+              </StackPanel>
+            </DataTemplate>
+            <DataTemplate DataType="vm:SkeletonDetailsViewModel">
+              <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="0,0,0,8">
+                <StackPanel Grid.Row="0" Spacing="4">
+                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Summary}" />
+                  <CheckBox Content="Show bones" IsChecked="{Binding ShowBones}" />
+                  <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Reset" Command="{Binding ResetBoneSizeCommand}" Padding="8,2" />
+                    <TextBlock Text="{Binding BoneSize, StringFormat='Bone size {0:0.##}'}" VerticalAlignment="Center" />
+                  </DockPanel>
+                  <Slider Minimum="0.1" Maximum="5" Value="{Binding BoneSize}" />
+                  <TextBlock Text="Bone colors" />
+                  <ComboBox ItemsSource="{Binding ColorModes}" SelectedIndex="{Binding ColorModeIndex}" HorizontalAlignment="Stretch" />
+                </StackPanel>
+                <DockPanel Grid.Row="1" Margin="0,12,0,4">
+                  <Button DockPanel.Dock="Right" Content="Deselect" Command="{Binding ClearSelectionCommand}" Padding="8,2" />
+                  <TextBlock Text="Bones" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </DockPanel>
+                <Border Grid.Row="2" BorderBrush="#3A3A3E" BorderThickness="1" CornerRadius="3">
+                  <TreeView ItemsSource="{Binding Bones}" SelectedItem="{Binding SelectedBone}">
+                    <TreeView.ItemTemplate>
+                      <TreeDataTemplate DataType="vm:BoneNodeViewModel" ItemsSource="{Binding Children}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <Ellipse Width="8" Height="8" Fill="{Binding Color}" VerticalAlignment="Center" />
+                          <TextBlock Text="{Binding Name}" Classes.selectedBone="{Binding IsHighlighted}" />
+                        </StackPanel>
+                      </TreeDataTemplate>
+                    </TreeView.ItemTemplate>
+                    <TreeView.Styles>
+                      <Style Selector="TreeViewItem" x:DataType="vm:BoneNodeViewModel">
+                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                        <Setter Property="MinHeight" Value="24" />
+                      </Style>
+                    </TreeView.Styles>
+                  </TreeView>
+                </Border>
+                <StackPanel Grid.Row="3" Spacing="6" Margin="0,8,0,0">
+                  <TextBlock Text="{Binding SelectedBoneInfo}" TextWrapping="Wrap" Opacity="0.85" />
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Button Content="Reset bone" Command="{Binding ResetBoneCommand}" Padding="8,2" />
+                    <Button Content="Reset pose" Command="{Binding ResetPoseCommand}" IsEnabled="{Binding IsPosed}" Padding="8,2" />
+                  </StackPanel>
+                </StackPanel>
+              </Grid>
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
       </DockPanel>
     </Grid>
   </DockPanel>

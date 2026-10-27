@@ -16,6 +16,10 @@
     <PackageReference Include="CommunityToolkit.Mvvm" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Sample meshes (with their licenses) ship next to the executable; the first run copies them into the Demo project. -->
+    <None Include="..\..\assets\Samples\**\*" Link="Samples\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\FVMeatbag.Graph\FVMeatbag.Graph.csproj" />
     <ProjectReference Include="..\FVMeatbag.Core\FVMeatbag.Core.csproj" />
     <ProjectReference Include="..\FVMeatbag.Scene\FVMeatbag.Scene.csproj" />

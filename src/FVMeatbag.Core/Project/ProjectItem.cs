@@ -1,3 +1,6 @@
+using FVMeatbag.Core.Import;
+using FVMeatbag.Graph;
+
 namespace FVMeatbag.Core.Project;
 
 /// <summary>A node in the project hierarchy. The hierarchy owns the data; scene components only display it.</summary>
@@ -54,12 +57,42 @@ public abstract class ProjectItem
 public sealed class ProjectFolder(string name) : ProjectItem(name);
 
 /// <summary>
-/// A skeletal mesh asset. Placeholder: geometry, skin weights, morph targets and poses are added
-/// as the import pipeline lands.
+/// A skeletal mesh asset: geometry, and for rigged meshes the skeleton, skin weights and pose.
+/// Morph targets are added as the pipeline grows.
 /// </summary>
 public sealed class SkeletalMeshAsset(string name, string? sourcePath = null) : ProjectItem(name)
 {
+    private Maybe<MeshGeometry> _geometry;
+    private Maybe<Skeleton> _skeleton;
+
+    /// <summary>Where the mesh was imported from: relative to the project directory when it was copied into the project.</summary>
     public string? SourcePath { get; } = sourcePath;
+
+    /// <summary>The mesh, or None if its source could not be read.</summary>
+    public Maybe<MeshGeometry> Geometry
+    {
+        get => _geometry;
+        set
+        {
+            _geometry = value;
+            MarkModified();
+        }
+    }
+
+    /// <summary>The bones the geometry's skin weights refer to; None for a static mesh.</summary>
+    public Maybe<Skeleton> Skeleton
+    {
+        get => _skeleton;
+        set
+        {
+            _skeleton = value;
+            Pose = value.Map(s => new SkeletonPose(s));
+            MarkModified();
+        }
+    }
+
+    /// <summary>The skeleton's current pose, saved with the project; None for a static mesh. Starts at rest.</summary>
+    public Maybe<SkeletonPose> Pose { get; private set; }
 
     /// <summary>Bumped on every edit, so graph change detection can compare versions instead of data.</summary>
     public long Version { get; private set; }

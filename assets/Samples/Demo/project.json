@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "name": "Demo",
+  "camera": {
+    "target": [
+      0,
+      0,
+      0
+    ],
+    "yaw": 90,
+    "pitch": 10,
+    "distance": 4,
+    "fieldOfView": 40
+  },
+  "light": {
+    "azimuth": 35,
+    "elevation": 45,
+    "color": [
+      1,
+      1,
+      1
+    ],
+    "intensity": 2.5
+  },
+  "meshes": [
+    {
+      "name": "MaleBaseMesh",
+      "path": "Meshes/MaleBaseMesh.glb"
+    }
+  ]
+}

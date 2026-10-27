@@ -92,7 +92,7 @@ public class SceneTests
         Assert.Null(body.Scene);
         Assert.Null(head.Graph);
         Assert.False(headGraph.IsAttached);
-        Assert.Empty(scene.Root.Graph!.Children);
+        Assert.Equal([scene.Camera.Graph!, scene.Light.Graph!], scene.Root.Graph!.Children);
     }
 
     [Fact]
@@ -107,6 +107,6 @@ public class SceneTests
 
         Assert.Null(scene.Selected);
         Assert.Null(scene.Gizmo);
-        Assert.Empty(scene.Root.Children);
+        Assert.Equal([scene.Camera, scene.Light], scene.Root.Children);
     }
 }

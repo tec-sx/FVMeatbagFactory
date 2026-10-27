@@ -11,6 +11,11 @@
     <PackageVersion Include="Avalonia.Fonts.Inter" Version="$(AvaloniaVersion)" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
   </ItemGroup>
+  <ItemGroup Label="Import">
+    <PackageVersion Include="SharpGLTF.Core" Version="1.0.7" />
+    <PackageVersion Include="SharpGLTF.Toolkit" Version="1.0.7" />
+    <PackageVersion Include="Silk.NET.Assimp" Version="$(SilkNetVersion)" />
+  </ItemGroup>
   <ItemGroup Label="Rendering">
     <PackageVersion Include="Silk.NET.Vulkan" Version="$(SilkNetVersion)" />
     <PackageVersion Include="Silk.NET.Vulkan.Extensions.KHR" Version="$(SilkNetVersion)" />

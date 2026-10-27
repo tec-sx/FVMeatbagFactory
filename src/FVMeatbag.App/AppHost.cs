@@ -1,4 +1,6 @@
 using Avalonia.Threading;
+using FVMeatbag.Core.Import;
+using FVMeatbag.Core.Project;
 using FVMeatbag.Graph;
 using FVMeatbag.Rendering;
 using FVMeatbag.Rendering.Vulkan;
@@ -18,8 +20,11 @@ public sealed class AppHost : IDisposable
     {
         RootGraph = Graph.Graph.CreateRoot("App", EvaluationMode.Deferred);
         Scene = new SceneRoot(RootGraph);
-        NewCharacter = new NewCharacterWorkflow(RootGraph.CreateChild("Workflows"), Scene);
+        var workflows = RootGraph.CreateChild("Workflows");
+        NewCharacter = new NewCharacterWorkflow(workflows.CreateChild("NewCharacter"), Scene);
+        ImportMesh = new ImportMeshWorkflow(workflows.CreateChild("ImportMesh"), Scene);
         Renderer = new VulkanBackend();
+        Workspace = ProjectWorkspace.ForCurrentUser();
 
         // Edits only queue work; the graph settles once per frame, however many edits arrived.
         _tick = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => Tick());
@@ -29,10 +34,59 @@ public sealed class AppHost : IDisposable
     public Graph.Graph RootGraph { get; }
     public SceneRoot Scene { get; }
     public NewCharacterWorkflow NewCharacter { get; }
+    public ImportMeshWorkflow ImportMesh { get; }
     public IRenderBackend Renderer { get; }
+
+    /// <summary>Documents/Projects.</summary>
+    public ProjectWorkspace Workspace { get; }
 
     /// <summary>Raised after a frame in which at least one node ran.</summary>
     public event EventHandler<int>? GraphEvaluated;
+
+    /// <summary>
+    /// First-run setup, like an installer: creates Documents/Projects and installs the saved Demo
+    /// project (with the sample character) if they are missing, then opens Demo. Returns problems
+    /// worth showing the user.
+    /// </summary>
+    public IReadOnlyList<string> OpenStartupProject()
+    {
+        try
+        {
+            return OpenProject(Workspace.EnsureCreated(DemoTemplate()));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException)
+        {
+            Scene.Show(new CharacterProject(ProjectWorkspace.DemoProjectName));
+            return [$"Could not set up {Workspace.DemoDirectory}: {e.Message}. Working in memory."];
+        }
+    }
+
+    /// <summary>The saved Demo project shipped next to the executable (assets/Samples/Demo in the repository).</summary>
+    public static Maybe<string> DemoTemplate()
+    {
+        var folder = Path.Combine(AppContext.BaseDirectory, "Samples", ProjectWorkspace.DemoProjectName);
+        return ProjectFile.Exists(folder) ? folder : Maybe<string>.None;
+    }
+
+    public IReadOnlyList<string> OpenProject(string directory)
+    {
+        var problems = new List<string>();
+        Scene.Show(ProjectFile.Load(directory, problems));
+        return problems;
+    }
+
+    /// <summary>Saves the open project, with the current camera, light and poses. Returns the file written, or None for an in-memory project.</summary>
+    public Maybe<string> SaveProject()
+    {
+        var project = Scene.Project.OrThrow("No project is open.");
+        if (project.Directory.IsNone)
+        {
+            return Maybe<string>.None;
+        }
+        Scene.StoreViewSettings(project);
+        ProjectFile.Save(project);
+        return project.Directory.Map(d => Path.Combine(d, ProjectFile.FileName));
+    }
 
     public void Dispose()
     {
