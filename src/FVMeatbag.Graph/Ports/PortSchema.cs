@@ -13,9 +13,7 @@ namespace FVMeatbag.Graph.Ports;
 /// </remarks>
 public static class PortSchema<TStruct> where TStruct : struct
 {
-#pragma warning disable CA1000 // the per-type static cache is the point of this class
     public static IReadOnlyList<PortField<TStruct>> Fields { get; } = Build();
-#pragma warning restore CA1000
 
     private static PortField<TStruct>[] Build()
     {

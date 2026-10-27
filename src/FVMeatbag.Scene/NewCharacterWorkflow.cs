@@ -26,7 +26,7 @@ public sealed class NewCharacterWorkflow
     public Node<AddToSceneInput, AddToSceneOutput> AddToScene { get; }
 
     /// <summary>Starts the chain. In deferred mode it runs on the next evaluate.</summary>
-    public void Run(string meshPath, string? projectName = null)
+    public void Run(string meshPath, Maybe<string> projectName = default)
     {
         LoadMesh.SetInputs(new LoadMeshInput { Path = meshPath });
         CreateProject.UpdateInputs((ref CreateProjectInput i) => i.Name = projectName);

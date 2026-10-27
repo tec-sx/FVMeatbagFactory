@@ -51,17 +51,19 @@ public abstract class Node
     internal int Rank { get; set; }
     internal bool IsQueued { get; set; }
 
-    public InputPort Input(string name) =>
-        Inputs.FirstOrDefault(p => p.Name == name) ?? throw new KeyNotFoundException($"{Name} has no input '{name}'.");
+    public Maybe<InputPort> FindInput(string name) => Inputs.FirstOrNone(p => p.Name == name);
+    public Maybe<OutputPort> FindOutput(string name) => Outputs.FirstOrNone(p => p.Name == name);
+    public Maybe<ExecInput> FindExecIn(string name) => ExecInputs.FirstOrNone(p => p.Name == name);
+    public Maybe<ExecOutput> FindExecOut(string name) => ExecOutputs.FirstOrNone(p => p.Name == name);
 
-    public OutputPort Output(string name) =>
-        Outputs.FirstOrDefault(p => p.Name == name) ?? throw new KeyNotFoundException($"{Name} has no output '{name}'.");
+    public InputPort Input(string name) => FindInput(name).OrElse(() => throw Missing("input", name));
+    public OutputPort Output(string name) => FindOutput(name).OrElse(() => throw Missing("output", name));
 
     public ExecInput ExecIn(string name = ActionOperation<Unit, Unit>.DefaultInput) =>
-        ExecInputs.FirstOrDefault(p => p.Name == name) ?? throw new KeyNotFoundException($"{Name} has no exec input '{name}'.");
+        FindExecIn(name).OrElse(() => throw Missing("exec input", name));
 
     public ExecOutput ExecOut(string name = ActionOperation<Unit, Unit>.DefaultOutput) =>
-        ExecOutputs.FirstOrDefault(p => p.Name == name) ?? throw new KeyNotFoundException($"{Name} has no exec output '{name}'.");
+        FindExecOut(name).OrElse(() => throw Missing("exec output", name));
 
     /// <summary>Runs this action node from the named exec input (immediately, or on the next evaluate in deferred mode).</summary>
     public void Trigger(string execInput = ActionOperation<Unit, Unit>.DefaultInput) =>
@@ -84,6 +86,8 @@ public abstract class Node
         OutputsChanged?.Invoke(this, new OutputsChangedEventArgs(changed));
 
     public override string ToString() => Name;
+
+    private KeyNotFoundException Missing(string kind, string name) => new($"{Name} has no {kind} '{name}'.");
 }
 
 /// <summary>An empty port struct, for operations without inputs or outputs.</summary>

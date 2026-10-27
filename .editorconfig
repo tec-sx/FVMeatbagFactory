@@ -26,3 +26,5 @@ dotnet_naming_style.underscore_camel.required_prefix = _
 dotnet_naming_style.underscore_camel.capitalization = camel_case
 # Node input/output structs expose their ports as public fields by design.
 dotnet_diagnostic.CA1051.severity = none
+# Static factories/caches on generic types (Maybe<T>.None, PortSchema<T>.Fields) are intended.
+dotnet_diagnostic.CA1000.severity = none

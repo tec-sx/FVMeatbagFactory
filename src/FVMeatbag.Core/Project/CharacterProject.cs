@@ -1,3 +1,5 @@
+using FVMeatbag.Graph;
+
 namespace FVMeatbag.Core.Project;
 
 /// <summary>The root of a project hierarchy.</summary>
@@ -18,5 +20,5 @@ public sealed class CharacterProject
     public ProjectFolder Morphs { get; }
     public ProjectFolder Poses { get; }
 
-    public ProjectItem? Find(Guid id) => Root.DescendantsAndSelf().FirstOrDefault(i => i.Id == id);
+    public Maybe<ProjectItem> Find(Guid id) => Root.DescendantsAndSelf().FirstOrNone(i => i.Id == id);
 }

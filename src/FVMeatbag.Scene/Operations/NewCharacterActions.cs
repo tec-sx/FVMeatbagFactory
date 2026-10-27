@@ -7,12 +7,12 @@ namespace FVMeatbag.Scene.Operations;
 
 public struct LoadMeshInput
 {
-    public string? Path;
+    public Maybe<string> Path;
 }
 
 public struct LoadMeshOutput
 {
-    public LoadedMesh? Mesh;
+    public Maybe<LoadedMesh> Mesh;
 }
 
 /// <summary>Reads a base skeletal mesh from disk. Placeholder: only records name and path for now.</summary>
@@ -20,21 +20,21 @@ public sealed class LoadMeshAction : ActionOperation<LoadMeshInput, LoadMeshOutp
 {
     public override void Execute(in LoadMeshInput input, ref LoadMeshOutput output, EvaluationContext context)
     {
-        var path = input.Path ?? throw new InvalidOperationException("No mesh path given.");
+        var path = input.Path.OrThrow("No mesh path given.");
         output.Mesh = new LoadedMesh(Path.GetFileNameWithoutExtension(path), path);
     }
 }
 
 public struct CreateProjectInput
 {
-    public string? Name;
-    public LoadedMesh? Mesh;
+    public Maybe<string> Name;
+    public Maybe<LoadedMesh> Mesh;
 }
 
 public struct CreateProjectOutput
 {
-    public CharacterProject? Project;
-    public SkeletalMeshAsset? BaseMesh;
+    public Maybe<CharacterProject> Project;
+    public Maybe<SkeletalMeshAsset> BaseMesh;
 }
 
 /// <summary>Builds a new project hierarchy around a loaded base mesh.</summary>
@@ -42,8 +42,8 @@ public sealed class CreateProjectAction : ActionOperation<CreateProjectInput, Cr
 {
     public override void Execute(in CreateProjectInput input, ref CreateProjectOutput output, EvaluationContext context)
     {
-        var mesh = input.Mesh ?? throw new InvalidOperationException("No mesh loaded.");
-        var project = new CharacterProject(input.Name ?? mesh.Name);
+        var mesh = input.Mesh.OrThrow("No mesh loaded.");
+        var project = new CharacterProject(input.Name.OrDefault(mesh.Name));
         output.BaseMesh = project.Meshes.Add(new SkeletalMeshAsset(mesh.Name, mesh.SourcePath));
         output.Project = project;
     }
@@ -51,13 +51,13 @@ public sealed class CreateProjectAction : ActionOperation<CreateProjectInput, Cr
 
 public struct AddToSceneInput
 {
-    public SceneRoot? Scene;
-    public SkeletalMeshAsset? Asset;
+    public Maybe<SceneRoot> Scene;
+    public Maybe<SkeletalMeshAsset> Asset;
 }
 
 public struct AddToSceneOutput
 {
-    public MeshComponent? Component;
+    public Maybe<MeshComponent> Component;
 }
 
 /// <summary>Creates a mesh scene component that displays a project asset.</summary>
@@ -65,8 +65,8 @@ public sealed class AddToSceneAction : ActionOperation<AddToSceneInput, AddToSce
 {
     public override void Execute(in AddToSceneInput input, ref AddToSceneOutput output, EvaluationContext context)
     {
-        var scene = input.Scene ?? throw new InvalidOperationException("No scene.");
-        var asset = input.Asset ?? throw new InvalidOperationException("No asset to add.");
+        var scene = input.Scene.OrThrow("No scene.");
+        var asset = input.Asset.OrThrow("No asset to add.");
         output.Component = scene.Root.AddChild(new MeshComponent(asset.Name, asset.Id));
     }
 }

@@ -1,3 +1,4 @@
+using FVMeatbag.Core.Project;
 using FVMeatbag.Graph;
 
 namespace FVMeatbag.Scene.Tests;
@@ -17,12 +18,12 @@ public class NewCharacterWorkflowTests
         root.Evaluator.Evaluate();
 
         Assert.Equal(["LoadMesh", "CreateProject", "AddToScene"], order);
-        var project = workflow.CreateProject.OutputValues.Project!;
-        var component = workflow.AddToScene.OutputValues.Component!;
+        var project = workflow.CreateProject.OutputValues.Project.Value;
+        var component = workflow.AddToScene.OutputValues.Component.Value;
         Assert.Equal("Hero", project.Name);
         Assert.Same(scene.Root, component.Parent);
         Assert.NotNull(component.Graph);
-        Assert.Same(workflow.CreateProject.OutputValues.BaseMesh, project.Find(component.AssetId));
+        Assert.Equal(workflow.CreateProject.OutputValues.BaseMesh.Map(m => (ProjectItem)m), project.Find(component.AssetId));
     }
 
     [Fact]
@@ -35,7 +36,7 @@ public class NewCharacterWorkflowTests
         workflow.LoadMesh.Trigger(); // no path set
 
         Assert.Equal(NodeState.Faulted, workflow.LoadMesh.State);
-        Assert.Null(workflow.CreateProject.OutputValues.Project);
+        Assert.True(workflow.CreateProject.OutputValues.Project.IsNone);
         Assert.Empty(scene.Root.Children);
     }
 }

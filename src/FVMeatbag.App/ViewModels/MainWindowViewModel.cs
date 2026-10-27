@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FVMeatbag.Core.Project;
+using FVMeatbag.Graph;
 using FVMeatbag.Scene.Components;
 
 namespace FVMeatbag.App.ViewModels;
@@ -9,7 +10,7 @@ namespace FVMeatbag.App.ViewModels;
 public sealed partial class MainWindowViewModel : ViewModelBase
 {
     private readonly AppHost _host;
-    private CharacterProject? _project;
+    private Maybe<CharacterProject> _project;
 
     [ObservableProperty]
     private string _status = "No project";
@@ -36,7 +37,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<SceneComponentViewModel> Outliner { get; } = [];
 
-    private string ProjectLabel => _project?.Name ?? "No project";
+    private string ProjectLabel => _project.Map(p => p.Name).OrDefault("No project");
     private int GraphCount => _host.RootGraph.DescendantsAndSelf().Count();
 
     // Runs load mesh → create project → add to scene. The path is a placeholder until there is a file dialog.

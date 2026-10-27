@@ -41,6 +41,18 @@ brush.UpdateInputs((ref BrushInput i) => i.Radius = 2f);
 - Edges connect an output port to an input port of exactly the same type. Conversions are nodes.
   An input has at most one incoming edge; an output fans out freely.
 
+### Optional values: `Maybe<T>`
+
+Graphs are full of values that are legitimately absent: no mesh loaded yet, no project, nothing
+selected. Ports and lookups model that with `Maybe<T>` instead of nulls:
+
+- `default(Maybe<T>)` is None, so a fresh port struct starts as "nothing yet".
+- Equality compares presence, then the value, so None → None does not trigger downstream work.
+- `Map`, `Bind`, `Where`, `Match`, `OrDefault` and `OrThrow` keep operations short. In actions,
+  `input.Mesh.OrThrow("No mesh loaded.")` faults the node and stops the chain when data is missing.
+- Lookups that may miss return it: `node.FindInput(name)`, `project.Find(id)`. The throwing
+  variants (`node.Input(name)`) stay for wiring code where a miss is a programming error.
+
 ### Change propagation
 
 You described each node listening to events on its inputs and recalculating. The runtime keeps

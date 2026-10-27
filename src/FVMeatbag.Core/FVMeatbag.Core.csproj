@@ -3,4 +3,8 @@
   <PropertyGroup>
     <RootNamespace>FVMeatbag.Core</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- For shared primitives such as Maybe<T>; the graph library itself has no dependencies. -->
+    <ProjectReference Include="..\FVMeatbag.Graph\FVMeatbag.Graph.csproj" />
+  </ItemGroup>
 </Project>

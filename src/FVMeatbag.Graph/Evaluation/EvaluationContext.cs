@@ -34,8 +34,6 @@ public sealed class EvaluationContext
         {
             throw new GraphException($"{Node.Name} is not running as an action; only actions can fire exec outputs.");
         }
-        var output = Node.ExecOutputs.FirstOrDefault(o => o.Name == execOutput)
-            ?? throw new KeyNotFoundException($"{Node.Name} has no exec output '{execOutput}'.");
-        (_fired ??= []).Add(output);
+        (_fired ??= []).Add(Node.ExecOut(execOutput));
     }
 }
