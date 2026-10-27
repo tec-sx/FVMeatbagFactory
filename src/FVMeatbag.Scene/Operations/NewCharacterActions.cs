@@ -15,11 +15,11 @@ public struct LoadMeshOutput
     public Maybe<LoadedMesh> Mesh;
 }
 
-/// <summary>Reads a mesh from a glTF file (.glb or .gltf).</summary>
+/// <summary>Reads a mesh from a glTF (.glb, .gltf) or FBX (.fbx) file.</summary>
 public sealed class LoadMeshAction : ActionOperation<LoadMeshInput, LoadMeshOutput>
 {
     public override void Execute(in LoadMeshInput input, ref LoadMeshOutput output, EvaluationContext context) =>
-        output.Mesh = GltfImporter.Load(input.Path.OrThrow("No mesh path given."));
+        output.Mesh = MeshImporter.Load(input.Path.OrThrow("No mesh path given."));
 }
 
 public struct CreateProjectInput

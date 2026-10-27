@@ -121,7 +121,7 @@ public static class ProjectFile
     {
         try
         {
-            return GltfImporter.Load(file);
+            return MeshImporter.Load(file);
         }
         catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or SharpGLTF.Validation.ModelException)
         {

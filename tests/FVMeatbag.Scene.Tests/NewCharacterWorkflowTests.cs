@@ -103,7 +103,7 @@ public sealed class NewCharacterWorkflowTests : IDisposable
         EqualityComparer<Vector3>.Create((a, b) => Vector3.Distance(a, b) < 1e-4f, _ => 0);
 
     [Fact]
-    public void Importing_a_non_gltf_file_faults_and_adds_nothing()
+    public void Importing_an_unsupported_file_faults_and_adds_nothing()
     {
         var root = Graph.Graph.CreateRoot();
         var scene = new SceneRoot(root);
@@ -111,7 +111,7 @@ public sealed class NewCharacterWorkflowTests : IDisposable
         scene.Show(project);
         var workflow = new ImportMeshWorkflow(root, scene);
 
-        workflow.Run(_temp.Combine("Body.fbx"), project);
+        workflow.Run(_temp.Combine("Body.obj"), project);
 
         Assert.Equal(NodeState.Faulted, workflow.LoadMesh.State);
         Assert.IsType<NotSupportedException>(workflow.LoadMesh.Fault);

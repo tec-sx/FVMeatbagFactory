@@ -13,6 +13,9 @@
     <Using Include="Xunit" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Fixtures\*.fbx" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\FVMeatbag.Scene\FVMeatbag.Scene.csproj" />
   </ItemGroup>
 </Project>

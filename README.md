@@ -26,12 +26,13 @@ On first start the app installs the saved Demo project ([assets/Samples/Demo](as
 as `Documents/Projects/Demo`, with a rigged sample character (3D Male Base Mesh, CC0), and opens it. Every project has one
 camera and one light; select them in the outliner to adjust them.
 
-- **File → Import Mesh** (Ctrl+I) loads a `.glb`/`.gltf` into the open project and places it at
+- **File → Import Mesh** (Ctrl+I) loads a `.glb`/`.gltf` or `.fbx` into the open project and places it at
   the center of the scene. You can also pass a file on the command line:
   `dotnet run --project src/FVMeatbag.App -- Suzanne.glb`.
 - **File → Save** (Ctrl+S) writes `project.json`; imported files are copied into the project's
   `Meshes` folder.
-- Rigged glTF files keep their skeleton and skin weights. Bones are drawn Maya style: a wire
+- Rigged glTF and FBX files keep their skeleton and skin weights. FBX files are converted to
+  +Y up and meters; one saved in a pose imports in that pose. Bones are drawn Maya style: a wire
   sphere on each joint and a pyramid to each child, colored by side (left blue, right red,
   center yellow) or all in Maya's default blue (the **Bone colors** options "By side" and
   "Default"); the selected bone turns green.

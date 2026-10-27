@@ -48,7 +48,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Host.Scene.Manipulator.Changed += (_, _) => OnToolChanged();
 
         var problems = Host.OpenStartupProject();
-        Report(problems.Count == 0 ? "Ready. File → Import Mesh… to load a .glb." : string.Join(" ", problems));
+        Report(problems.Count == 0 ? "Ready. File → Import Mesh… to load a .glb or .fbx." : string.Join(" ", problems));
     }
 
     /// <summary>Design-time constructor.</summary>

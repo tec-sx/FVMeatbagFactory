@@ -180,7 +180,8 @@ Import Mesh (ImportMeshWorkflow)
 [Load mesh] ─▶ [Add mesh to project] ─▶ [Add to scene]
 ```
 
-Load mesh reads glTF 2.0 (.glb/.gltf) with SharpGLTF and bakes every mesh in the file into one
+Load mesh picks the reader by extension (`MeshImporter`): glTF 2.0 (.glb/.gltf) with SharpGLTF,
+FBX with the native Assimp library (Silk.NET.Assimp). Either way it bakes every mesh in the file into one
 `MeshGeometry` (positions, normals, indices) in world space. Skinned meshes are deformed into the
 rest pose the file shows (joint world × inverse bind, so armature transforms are honored); all
 their joints become one `Skeleton` (bones ordered parents first, rest transforms, inverse bind =
@@ -193,6 +194,17 @@ four-sided pyramid to each child, colored by side from the bone name (`.L`/`_L`/
 and the same for right) or uniformly, with the selected bone in Maya's selection green. The
 component holds the bone selection; `BonePicker` maps a viewport click to a joint (projected
 sphere plus a few pixels of slack) or, failing that, to the bone segment's parent joint.
+
+FBX specifics (`FbxImporter`): Assimp applies the file's axis system but not its units, so the
+scene is scaled to meters from the UnitScaleFactor metadata (centimeters per unit; Blender's
+default export stores 1 and puts a ×100 on the objects instead, "FBX All" stores 100). FBX does
+not mark joints, so the skeleton is every bone that weights a vertex, every node between two of
+them, and every mesh-free node below one (end joints such as Blender's `_end` leaf bones).
+Blender writes bind matrices without the mesh object's transform, which Assimp does not expect,
+so the importer tries the mesh's own space, its local transform and its transform below the
+root, and keeps the one that leaves the skinned mesh where its node puts it. The Blender exports
+of the Demo character in `tests/FVMeatbag.Scene.Tests/Fixtures` (default, Z-up with "FBX All"
+scale, and a posed rig with the mesh parented to a moved armature) all import as Blender shows them.
 
 Posing: the pose is document data, a `SkeletonPose` on the mesh asset (each bone's translation,
 rotation and scale relative to its parent, starting at rest), saved in `project.json` for posed

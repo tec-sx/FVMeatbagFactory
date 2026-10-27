@@ -7,9 +7,9 @@ namespace FVMeatbag.App.Views;
 
 public partial class MainWindow : Window, IFileDialogs
 {
-    private static readonly FilePickerFileType GltfFiles = new("glTF 2.0")
+    private static readonly FilePickerFileType MeshFiles = new("Meshes (glTF, FBX)")
     {
-        Patterns = [.. GltfImporter.SupportedExtensions.Select(e => "*" + e)],
+        Patterns = [.. MeshImporter.SupportedExtensions.Select(e => "*" + e)],
     };
 
     public MainWindow()
@@ -30,7 +30,7 @@ public partial class MainWindow : Window, IFileDialogs
         {
             Title = "Choose a mesh",
             AllowMultiple = false,
-            FileTypeFilter = [GltfFiles],
+            FileTypeFilter = [MeshFiles],
         });
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
