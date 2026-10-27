@@ -15,7 +15,13 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var host = new AppHost();
-            desktop.MainWindow = new MainWindow { DataContext = new MainWindowViewModel(host) };
+            var viewModel = new MainWindowViewModel(host);
+            desktop.MainWindow = new MainWindow { DataContext = viewModel };
+            // "FVMeatbagFactory Suzanne.glb" (or dropping a file on the exe) imports it into the startup project.
+            foreach (var path in desktop.Args ?? [])
+            {
+                viewModel.ImportMeshFile(path);
+            }
             desktop.Exit += (_, _) => host.Dispose();
         }
         base.OnFrameworkInitializationCompleted();

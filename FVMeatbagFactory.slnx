@@ -9,6 +9,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/FVMeatbag.Graph.Tests/FVMeatbag.Graph.Tests.csproj" />
+    <Project Path="tests/FVMeatbag.Rendering.Vulkan.Tests/FVMeatbag.Rendering.Vulkan.Tests.csproj" />
     <Project Path="tests/FVMeatbag.Scene.Tests/FVMeatbag.Scene.Tests.csproj" />
   </Folder>
 </Solution>

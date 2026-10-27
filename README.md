@@ -14,11 +14,25 @@ Every feature is assembled from small, reusable nodes in a standalone graph runt
 | `src/FVMeatbag.Core` | Project hierarchy (the document model that owns meshes, morphs, poses). |
 | `src/FVMeatbag.Scene` | Root scene and scene components (visual only), each owning a child graph. |
 | `src/FVMeatbag.Rendering` | Backend-agnostic render contracts and the PBR material model. |
-| `src/FVMeatbag.Rendering.Vulkan` | Vulkan backend on Silk.NET (instance creation only so far). |
+| `src/FVMeatbag.Rendering.Vulkan` | Vulkan backend on Silk.NET: offscreen clay-shaded rendering with MSAA. |
 | `src/FVMeatbag.App` | Avalonia desktop shell (Windows first, Linux later). |
-| `tests/*` | xUnit v3 tests for the graph runtime and scene binding. |
+| `tests/*` | xUnit v3 tests for the graph runtime, scene, projects and import, and offscreen rendering. |
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design.
+
+## Using it
+
+On first start the app creates `Documents/Projects/Demo` and opens it. Every project has one
+camera and one light; select them in the outliner to adjust them.
+
+- **File → Import Mesh** (Ctrl+I) loads a `.glb`/`.gltf` into the open project and places it at
+  the center of the scene. You can also pass a file on the command line:
+  `dotnet run --project src/FVMeatbag.App -- Suzanne.glb`.
+- **File → Save** (Ctrl+S) writes `project.json`; imported files are copied into the project's
+  `Meshes` folder.
+- Viewport: drag to orbit, right drag or Shift+drag to pan, wheel to zoom, F to frame.
+
+The viewport needs a GPU driver with Vulkan 1.2.
 
 ## Build
 

@@ -118,6 +118,32 @@ Root graph "App"
   target's world output. Moving the target moves the gizmo through the graph. Move/rotate/scale
   interaction will be nodes in the gizmo's graph. Changing selection removes the gizmo graph.
 
+### Camera and light
+
+Every scene has exactly one `OrbitCameraComponent` and one `DirectionalLightComponent`, created by
+`SceneRoot`. The app is about the character, not staging, so they are adjusted but never added or
+removed (`SceneComponent.IsRemovable` is false and their constructors are internal). Each owns a
+node in its graph that turns settings into what the renderer needs (view/projection matrices,
+direction to the light and radiance), so the viewport redraws through the same change propagation
+as everything else. Their settings belong to the project and are saved with it.
+
+The camera orbits a target point (yaw, pitch, distance) and pans by moving that point across the
+view plane. Viewport controls: left or middle drag orbits, right drag or Shift+drag pans, the wheel
+zooms, F frames the scene.
+
+### Projects on disk
+
+```
+Documents/Projects/            ← ProjectWorkspace, created on first run like an installer would
+└── Demo/                      ← created on first run and opened at startup
+    ├── project.json           ← name, camera, light, mesh list (paths relative to the folder)
+    └── Meshes/Suzanne.glb     ← imported files are copied in, so the folder is self-contained
+```
+
+`ProjectFile` saves and opens this layout. A mesh whose file is missing stays in the project with
+no geometry and is reported instead of failing the whole project. New projects get their own
+folder next to Demo.
+
 ### Data wires and execution wires
 
 The graph has two kinds of wire (decided 2026-10-27):
@@ -139,15 +165,21 @@ inputs, including results of earlier steps. Its changed data outputs then propag
 - An exec output leads to one input; an input accepts many. Exec loops are allowed (state
   machines) and runaway loops are stopped by `MaxEvaluationsPerPass`.
 
-`NewCharacterWorkflow` is the first real chain and backs **File → New Project** in the app:
+Two chains back the File menu, built from the same action nodes:
 
 ```
-[Load mesh] ──exec──▶ [Create project] ──exec──▶ [Add to scene]
-     Mesh ───data───▶ Mesh       BaseMesh ──data──▶ Asset
+New Project from Mesh (NewCharacterWorkflow)
+[Load mesh] ─▶ [Create project] ─▶ [Add mesh to project] ─▶ [Add to scene] ─▶ [Save project]
+
+Import Mesh (ImportMeshWorkflow)
+[Load mesh] ─▶ [Add mesh to project] ─▶ [Add to scene]
 ```
 
-Load mesh only records the file name and path for now; the real importer slots in later without
-changing the chain.
+Load mesh reads glTF 2.0 (.glb/.gltf) with SharpGLTF and bakes every mesh in the file into one
+`MeshGeometry` (positions, normals, indices) in world space. Skeletons and skin weights come with
+the skeletal import milestone. Add mesh to project copies the source file into the project's
+`Meshes` folder. Add to scene places the mesh so its bounds are centered on the origin and frames
+the camera on it.
 
 Undo/redo should live at the graph-edit level (input changes, connect, add/remove) as commands.
 **Open.**
@@ -189,8 +221,20 @@ is the common subset of all three:
 | Output | Linear HDR → filmic/ACES tonemap | Match UE's default for look parity |
 
 Coordinate systems differ: glTF is right-handed Y-up meters, Blender right-handed Z-up meters,
-UE left-handed Z-up centimeters. **Open:** pick the internal convention (recommendation: glTF's,
-converting only at the import/export and UE bridge boundaries).
+UE left-handed Z-up centimeters. The internal convention is glTF's (decided with the first demo
+scene); conversions happen only at the import/export and UE bridge boundaries. Blender's glTF
+exporter already converts to +Y up, and models face +Z, which is where the default camera sits.
+
+### Current renderer
+
+The first renderer draws untextured "clay": per-vertex normals, one directional light (Lambert)
+and a sky/ground hemisphere ambient, no materials. It renders offscreen with 4x MSAA where
+supported, resolves into a BGRA8 image and copies it into a host-visible buffer that the
+viewport control copies into a `WriteableBitmap` (step 1 above). Frames are only rendered when
+the graph changed or the viewport resized. Back faces are lit too, since imported meshes are not
+always closed. Shaders live in `src/FVMeatbag.Rendering.Vulkan/Shaders` as GLSL with committed
+SPIR-V. Offscreen tests render real frames on any Vulkan driver, including Mesa's software
+lavapipe, and skip when there is none.
 
 Skin will eventually want subsurface scattering (UE Subsurface Profile / Substrate); that is an
 extension on top of the base model, not a replacement.

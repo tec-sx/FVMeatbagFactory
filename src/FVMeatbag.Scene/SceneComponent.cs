@@ -29,6 +29,9 @@ public class SceneComponent
     public SceneComponent? Parent { get; private set; }
     public IReadOnlyList<SceneComponent> Children => _children;
 
+    /// <summary>False for components the scene owns for good, such as its one camera and light.</summary>
+    public virtual bool IsRemovable => true;
+
     /// <summary>The scene this component is attached to, or null.</summary>
     public SceneRoot? Scene { get; private set; }
 
@@ -70,6 +73,10 @@ public class SceneComponent
         if (!_children.Contains(child))
         {
             return false;
+        }
+        if (!child.IsRemovable)
+        {
+            throw new InvalidOperationException($"{child.Name} is part of every scene and cannot be removed.");
         }
         child.Detach();
         _children.Remove(child);

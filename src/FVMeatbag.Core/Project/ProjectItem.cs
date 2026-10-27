@@ -1,3 +1,6 @@
+using FVMeatbag.Core.Import;
+using FVMeatbag.Graph;
+
 namespace FVMeatbag.Core.Project;
 
 /// <summary>A node in the project hierarchy. The hierarchy owns the data; scene components only display it.</summary>
@@ -54,12 +57,26 @@ public abstract class ProjectItem
 public sealed class ProjectFolder(string name) : ProjectItem(name);
 
 /// <summary>
-/// A skeletal mesh asset. Placeholder: geometry, skin weights, morph targets and poses are added
-/// as the import pipeline lands.
+/// A skeletal mesh asset. Geometry only for now; skin weights, morph targets and poses are added
+/// as the import pipeline grows.
 /// </summary>
 public sealed class SkeletalMeshAsset(string name, string? sourcePath = null) : ProjectItem(name)
 {
+    private Maybe<MeshGeometry> _geometry;
+
+    /// <summary>Where the mesh was imported from: relative to the project directory when it was copied into the project.</summary>
     public string? SourcePath { get; } = sourcePath;
+
+    /// <summary>The mesh, or None if its source could not be read.</summary>
+    public Maybe<MeshGeometry> Geometry
+    {
+        get => _geometry;
+        set
+        {
+            _geometry = value;
+            MarkModified();
+        }
+    }
 
     /// <summary>Bumped on every edit, so graph change detection can compare versions instead of data.</summary>
     public long Version { get; private set; }
