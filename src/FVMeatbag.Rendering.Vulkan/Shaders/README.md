@@ -7,4 +7,6 @@ needs no shader compiler. After editing a shader, regenerate its `.spv` with gls
 ```sh
 glslangValidator -V clay.vert -o clay.vert.spv
 glslangValidator -V clay.frag -o clay.frag.spv
+glslangValidator -V line.vert -o line.vert.spv
+glslangValidator -V line.frag -o line.frag.spv
 ```

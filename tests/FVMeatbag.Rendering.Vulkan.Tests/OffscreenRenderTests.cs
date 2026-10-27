@@ -50,6 +50,20 @@ public sealed class OffscreenRenderTests : IDisposable
     }
 
     [Fact]
+    public void Lines_draw_on_top_of_meshes()
+    {
+        // A vertical line through the middle of the sphere, starting behind it.
+        var line = new LineSegment(new Vector3(0, -2, -2), new Vector3(0, 2, -2), new Vector3(1, 0, 0));
+
+        var pixels = Render([new MeshDraw(Sphere(Guid.NewGuid()), Matrix4x4.Identity)], lines: [line]);
+        Dump(pixels, "line");
+
+        // The line falls on a pixel boundary, so MSAA may split it over two columns; one must be clearly red.
+        Assert.Contains(Enumerable.Range(126, 4), x => IsRed(Pixel(pixels, x, 128)));
+        Assert.False(IsRed(Pixel(pixels, 140, 128)));
+    }
+
+    [Fact]
     public void World_matrix_moves_the_mesh()
     {
         var sphere = Sphere(Guid.NewGuid());
@@ -81,10 +95,10 @@ public sealed class OffscreenRenderTests : IDisposable
         return Render(backend, [], Size, Size, Vector3.UnitY);
     }
 
-    private byte[] Render(IReadOnlyList<MeshDraw> draws, uint width = Size, uint height = Size, Vector3? toLight = null) =>
-        Render(_backend, draws, width, height, toLight ?? Vector3.Normalize(new Vector3(1, 1, 1)));
+    private byte[] Render(IReadOnlyList<MeshDraw> draws, uint width = Size, uint height = Size, Vector3? toLight = null, IReadOnlyList<LineSegment>? lines = null) =>
+        Render(_backend, draws, width, height, toLight ?? Vector3.Normalize(new Vector3(1, 1, 1)), lines);
 
-    private static byte[] Render(VulkanBackend backend, IReadOnlyList<MeshDraw> draws, uint width, uint height, Vector3 toLight)
+    private static byte[] Render(VulkanBackend backend, IReadOnlyList<MeshDraw> draws, uint width, uint height, Vector3 toLight, IReadOnlyList<LineSegment>? lines = null)
     {
         var frame = new FrameContext(
             width,
@@ -94,7 +108,7 @@ public sealed class OffscreenRenderTests : IDisposable
             toLight,
             new Vector3(3f),
             0);
-        backend.RenderFrame(frame, draws);
+        backend.RenderFrame(frame, draws, lines ?? []);
         var pixels = new byte[width * height * 4];
         var handle = GCHandle.Alloc(pixels, GCHandleType.Pinned);
         try
@@ -109,6 +123,8 @@ public sealed class OffscreenRenderTests : IDisposable
     }
 
     private static uint Pixel(byte[] bgra, int x, int y, int width = (int)Size) => BitConverter.ToUInt32(bgra, ((y * width) + x) * 4);
+
+    private static bool IsRed(uint bgra) => ((bgra >> 16) & 0xFF) > 200 && ((bgra >> 8) & 0xFF) < 120 && (bgra & 0xFF) < 120;
 
     private static float Luma(uint bgra) => (0.11f * (bgra & 0xFF)) + (0.59f * ((bgra >> 8) & 0xFF)) + (0.3f * ((bgra >> 16) & 0xFF));
 

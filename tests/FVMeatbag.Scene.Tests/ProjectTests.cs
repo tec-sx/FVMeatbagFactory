@@ -26,6 +26,20 @@ public sealed class ProjectTests : IDisposable
     }
 
     [Fact]
+    public void First_run_puts_the_sample_character_into_the_demo_project()
+    {
+        var workspace = new ProjectWorkspace(_temp.Combine("Projects"));
+
+        var demo = ProjectFile.Load(workspace.EnsureCreated([SkeletonImportTests.SamplePath("MaleBaseMesh", "MaleBaseMesh.glb")]));
+
+        var mesh = Assert.Single(demo.MeshAssets);
+        Assert.Equal("MaleBaseMesh", mesh.Name);
+        Assert.Equal("Meshes/MaleBaseMesh.glb", mesh.SourcePath);
+        Assert.True(File.Exists(_temp.Combine("Projects", "Demo", "Meshes", "MaleBaseMesh.glb")));
+        Assert.Equal(56, mesh.Skeleton.Value.Count);
+    }
+
+    [Fact]
     public void Later_runs_keep_the_existing_demo_project()
     {
         var workspace = new ProjectWorkspace(_temp.Combine("Projects"));

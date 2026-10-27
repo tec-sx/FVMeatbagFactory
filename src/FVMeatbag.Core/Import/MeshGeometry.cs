@@ -1,4 +1,5 @@
 using System.Numerics;
+using FVMeatbag.Graph;
 
 namespace FVMeatbag.Core.Import;
 
@@ -41,8 +42,9 @@ public sealed class MeshGeometry
     private readonly Vector3[] _positions;
     private readonly Vector3[] _normals;
     private readonly uint[] _indices;
+    private readonly SkinWeights[]? _skin;
 
-    public MeshGeometry(Vector3[] positions, Vector3[] normals, uint[] indices)
+    public MeshGeometry(Vector3[] positions, Vector3[] normals, uint[] indices, SkinWeights[]? skin = null)
     {
         ArgumentNullException.ThrowIfNull(positions);
         ArgumentNullException.ThrowIfNull(normals);
@@ -62,7 +64,12 @@ public sealed class MeshGeometry
                 throw new ArgumentException($"Index {index} is out of range for {positions.Length} vertices.", nameof(indices));
             }
         }
+        if (skin is not null && skin.Length != positions.Length)
+        {
+            throw new ArgumentException("Every vertex needs exactly one set of skin weights.", nameof(skin));
+        }
         _positions = positions;
+        _skin = skin;
         _normals = normals;
         _indices = indices;
         Bounds = BoundingBox.FromPoints(positions);
@@ -71,6 +78,10 @@ public sealed class MeshGeometry
     public ReadOnlyMemory<Vector3> Positions => _positions;
     public ReadOnlyMemory<Vector3> Normals => _normals;
     public ReadOnlyMemory<uint> Indices => _indices;
+
+    /// <summary>Per-vertex bone weights, for meshes bound to a <see cref="Skeleton"/>.</summary>
+    public Maybe<ReadOnlyMemory<SkinWeights>> Skin => _skin is null ? Maybe<ReadOnlyMemory<SkinWeights>>.None : new ReadOnlyMemory<SkinWeights>(_skin);
+
     public int VertexCount => _positions.Length;
     public int TriangleCount => _indices.Length / 3;
     public BoundingBox Bounds { get; }

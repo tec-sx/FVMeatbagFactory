@@ -86,4 +86,20 @@ public sealed class MeshDetailsViewModel(SceneRoot scene, MeshComponent mesh) : 
     public string Geometry => scene.FindAsset(mesh).Bind(a => a.Geometry).Match(
         g => $"{g.VertexCount:N0} vertices, {g.TriangleCount:N0} triangles\nSize {g.Bounds.Size.X:0.###} × {g.Bounds.Size.Y:0.###} × {g.Bounds.Size.Z:0.###}",
         () => "Geometry missing: the source file could not be read.");
+
+    public string Rig => scene.FindAsset(mesh).Bind(a => a.Skeleton).Match(s => $"Skeleton: {s.Count} bones", () => "No skeleton (static mesh)");
+}
+
+/// <summary>Shows or hides a mesh's bones.</summary>
+public sealed class SkeletonDetailsViewModel(SkeletonComponent skeleton) : DetailsViewModel
+{
+    public override string Title => $"Skeleton of {skeleton.Parent?.Name}";
+
+    public string Summary => $"{skeleton.Skeleton.Count} bones, {skeleton.Skeleton.Bones.Count(b => b.Parent < 0)} root(s)";
+
+    public bool ShowBones
+    {
+        get => skeleton.Visible;
+        set => skeleton.Visible = value;
+    }
 }

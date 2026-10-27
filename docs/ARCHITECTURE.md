@@ -137,7 +137,9 @@ zooms, F frames the scene.
 Documents/Projects/            ← ProjectWorkspace, created on first run like an installer would
 └── Demo/                      ← created on first run and opened at startup
     ├── project.json           ← name, camera, light, mesh list (paths relative to the folder)
-    └── Meshes/Suzanne.glb     ← imported files are copied in, so the folder is self-contained
+    └── Meshes/
+        └── MaleBaseMesh.glb   ← the sample character (CC0, assets/Samples), copied in on creation;
+                                 imported files are copied here too, so the folder is self-contained
 ```
 
 `ProjectFile` saves and opens this layout. A mesh whose file is missing stays in the project with
@@ -176,8 +178,13 @@ Import Mesh (ImportMeshWorkflow)
 ```
 
 Load mesh reads glTF 2.0 (.glb/.gltf) with SharpGLTF and bakes every mesh in the file into one
-`MeshGeometry` (positions, normals, indices) in world space. Skeletons and skin weights come with
-the skeletal import milestone. Add mesh to project copies the source file into the project's
+`MeshGeometry` (positions, normals, indices) in world space. Skinned meshes are deformed into the
+rest pose the file shows (joint world × inverse bind, so armature transforms are honored); all
+their joints become one `Skeleton` (bones ordered parents first, rest transforms, inverse bind =
+inverse rest) and each vertex keeps up to four normalized `SkinWeights`. Because the stored mesh
+is already in the rest pose, bind pose = rest pose, which keeps later posing and weight editing
+simple. A rigged mesh gets a `SkeletonComponent` child in the scene whose graph node turns the
+bones into overlay lines that follow the mesh's transform. Add mesh to project copies the source file into the project's
 `Meshes` folder. Add to scene places the mesh so its bounds are centered on the origin and frames
 the camera on it.
 
@@ -232,7 +239,7 @@ and a sky/ground hemisphere ambient, no materials. It renders offscreen with 4x 
 supported, resolves into a BGRA8 image and copies it into a host-visible buffer that the
 viewport control copies into a `WriteableBitmap` (step 1 above). Frames are only rendered when
 the graph changed or the viewport resized. Back faces are lit too, since imported meshes are not
-always closed. Shaders live in `src/FVMeatbag.Rendering.Vulkan/Shaders` as GLSL with committed
+always closed. Overlay lines (bones) are drawn last without depth testing. Shaders live in `src/FVMeatbag.Rendering.Vulkan/Shaders` as GLSL with committed
 SPIR-V. Offscreen tests render real frames on any Vulkan driver, including Mesa's software
 lavapipe, and skip when there is none.
 

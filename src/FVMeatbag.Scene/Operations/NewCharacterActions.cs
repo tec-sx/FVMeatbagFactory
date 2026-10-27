@@ -75,6 +75,7 @@ public sealed class AddMeshToProjectAction : ActionOperation<AddMeshToProjectInp
         var asset = new SkeletalMeshAsset(mesh.Name, ProjectFile.CopyIntoProject(project, mesh.SourcePath))
         {
             Geometry = mesh.Geometry,
+            Skeleton = mesh.Skeleton,
         };
         output.Asset = project.Meshes.Add(asset);
         output.Project = project;

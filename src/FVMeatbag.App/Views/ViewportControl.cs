@@ -7,6 +7,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using FVMeatbag.Rendering;
 using FVMeatbag.Scene;
+using LineSegment = FVMeatbag.Rendering.LineSegment;
 
 namespace FVMeatbag.App.Views;
 
@@ -26,6 +27,7 @@ public sealed class ViewportControl : Control
         AvaloniaProperty.Register<ViewportControl, AppHost?>(nameof(Host));
 
     private const float OrbitDegreesPerPixel = 0.4f;
+    private static readonly System.Numerics.Vector3 BoneColor = new(1f, 0.6f, 0.15f);
     private static readonly IBrush Background = new SolidColorBrush(Color.FromRgb(0x21, 0x21, 0x24));
 
     private WriteableBitmap? _bitmap;
@@ -202,7 +204,7 @@ public sealed class ViewportControl : Control
             {
                 renderer.Initialize();
             }
-            renderer.RenderFrame(BuildFrame(host.Scene, (uint)width, (uint)height), BuildDraws(host.Scene));
+            renderer.RenderFrame(BuildFrame(host.Scene, (uint)width, (uint)height), BuildDraws(host.Scene), BuildLines(host.Scene));
 
             if (_bitmap is null || _bitmap.PixelSize.Width != width || _bitmap.PixelSize.Height != height)
             {
@@ -226,6 +228,24 @@ public sealed class ViewportControl : Control
         var camera = scene.Camera.CameraNode!.OutputValues;
         var light = scene.Light.LightNode!.OutputValues;
         return new FrameContext(width, height, camera.View, camera.Projection, light.DirectionToLight, light.Radiance, 0);
+    }
+
+    private static List<LineSegment> BuildLines(SceneRoot scene)
+    {
+        var lines = new List<LineSegment>();
+        foreach (var skeleton in scene.Skeletons)
+        {
+            if (skeleton.LinesNode is not { } node)
+            {
+                continue;
+            }
+            var points = node.OutputValues.Segments.Span;
+            for (var i = 0; i + 1 < points.Length; i += 2)
+            {
+                lines.Add(new LineSegment(points[i], points[i + 1], BoneColor));
+            }
+        }
+        return lines;
     }
 
     private static List<MeshDraw> BuildDraws(SceneRoot scene)

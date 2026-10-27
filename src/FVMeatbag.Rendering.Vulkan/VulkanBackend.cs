@@ -12,7 +12,8 @@ namespace FVMeatbag.Rendering.Vulkan;
 /// presentation plan in docs/ARCHITECTURE.md; zero-copy sharing with Avalonia comes later.
 /// </summary>
 /// <remarks>
-/// Shading is untextured "clay": one directional light plus a hemisphere ambient. Frames are
+/// Shading is untextured "clay": one directional light plus a hemisphere ambient. Overlay lines
+/// (bones) are drawn last, without depth testing, so they show through the mesh. Frames are
 /// rendered synchronously (submit, then wait), which keeps resource lifetimes trivial while the
 /// renderer is small.
 /// </remarks>
@@ -36,6 +37,9 @@ public sealed unsafe class VulkanBackend : IRenderBackend
     private RenderPass _renderPass;
     private PipelineLayout _pipelineLayout;
     private Pipeline _pipeline;
+    private PipelineLayout _linePipelineLayout;
+    private Pipeline _linePipeline;
+    private HostBuffer? _lineVertices;
     private RenderTarget? _target;
 
     public string Name => "Vulkan";
@@ -69,7 +73,10 @@ public sealed unsafe class VulkanBackend : IRenderBackend
             _vk = vk;
             CreateCommandObjects();
             _renderPass = CreateRenderPass();
-            (_pipelineLayout, _pipeline) = CreatePipeline();
+            (_pipelineLayout, _pipeline) = CreatePipeline(
+                "clay", PrimitiveTopology.TriangleList, depthTest: true, (uint)sizeof(PushConstants), ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit);
+            (_linePipelineLayout, _linePipeline) = CreatePipeline(
+                "line", PrimitiveTopology.LineList, depthTest: false, (uint)sizeof(LinePushConstants), ShaderStageFlags.VertexBit);
         }
         catch
         {
@@ -91,9 +98,10 @@ public sealed unsafe class VulkanBackend : IRenderBackend
         _target = width == 0 || height == 0 ? null : new RenderTarget(this, width, height);
     }
 
-    public void RenderFrame(in FrameContext frame, IReadOnlyList<MeshDraw> draws)
+    public void RenderFrame(in FrameContext frame, IReadOnlyList<MeshDraw> draws, IReadOnlyList<LineSegment> lines)
     {
         ArgumentNullException.ThrowIfNull(draws);
+        ArgumentNullException.ThrowIfNull(lines);
         var vk = Api;
         Resize(frame.Width, frame.Height);
         if (_target is not { } target)
@@ -159,6 +167,7 @@ public sealed unsafe class VulkanBackend : IRenderBackend
             vk.CmdBindIndexBuffer(_commandBuffer, mesh.Indices.Buffer, 0, IndexType.Uint32);
             vk.CmdDrawIndexed(_commandBuffer, mesh.IndexCount, 1, 0, 0, 0);
         }
+        DrawLines(lines, viewProjection);
         vk.CmdEndRenderPass(_commandBuffer);
 
         // The render pass leaves the presented image in TransferSrcOptimal.
@@ -231,6 +240,10 @@ public sealed unsafe class VulkanBackend : IRenderBackend
             _meshes.Clear();
             _target?.Dispose();
             _target = null;
+            _lineVertices?.Dispose();
+            _lineVertices = null;
+            vk.DestroyPipeline(_device, _linePipeline, null);
+            vk.DestroyPipelineLayout(_device, _linePipelineLayout, null);
             vk.DestroyPipeline(_device, _pipeline, null);
             vk.DestroyPipelineLayout(_device, _pipelineLayout, null);
             vk.DestroyRenderPass(_device, _renderPass, null);
@@ -493,10 +506,48 @@ public sealed unsafe class VulkanBackend : IRenderBackend
         return renderPass;
     }
 
-    private (PipelineLayout Layout, Pipeline Pipeline) CreatePipeline()
+    /// <summary>Draws overlay lines with the line pipeline. Called inside the render pass, after the meshes.</summary>
+    private void DrawLines(IReadOnlyList<LineSegment> lines, Matrix4x4 viewProjection)
+    {
+        if (lines.Count == 0)
+        {
+            return;
+        }
+        var vk = Api;
+        var vertexCount = lines.Count * 2;
+        var bytes = (ulong)(vertexCount * sizeof(Vertex));
+        if (_lineVertices is null || _lineVertices.Size < bytes)
+        {
+            // The previous frame has finished (RenderFrame waits for it), so the old buffer is free.
+            _lineVertices?.Dispose();
+            _lineVertices = new HostBuffer(this, Math.Max(bytes * 2, 4096), BufferUsageFlags.VertexBufferBit);
+        }
+        var vertices = new Span<Vertex>(_lineVertices.Mapped, vertexCount);
+        for (var i = 0; i < lines.Count; i++)
+        {
+            // Same layout as mesh vertices; the second attribute carries the color.
+            vertices[i * 2] = new Vertex { Position = lines[i].From, Normal = lines[i].Color };
+            vertices[(i * 2) + 1] = new Vertex { Position = lines[i].To, Normal = lines[i].Color };
+        }
+
+        vk.CmdBindPipeline(_commandBuffer, PipelineBindPoint.Graphics, _linePipeline);
+        var push = new LinePushConstants { ViewProjection = viewProjection };
+        vk.CmdPushConstants(_commandBuffer, _linePipelineLayout, ShaderStageFlags.VertexBit, 0, (uint)sizeof(LinePushConstants), &push);
+        ulong offset = 0;
+        var buffer = _lineVertices.Buffer;
+        vk.CmdBindVertexBuffers(_commandBuffer, 0, 1, &buffer, &offset);
+        vk.CmdDraw(_commandBuffer, (uint)vertexCount, 1, 0, 0);
+    }
+
+    /// <summary>
+    /// A pipeline over the shared vertex layout (two vec3 attributes). <paramref name="shader"/>
+    /// names the embedded <c>.vert.spv</c>/<c>.frag.spv</c> pair.
+    /// </summary>
+    private (PipelineLayout Layout, Pipeline Pipeline) CreatePipeline(
+        string shader, PrimitiveTopology topology, bool depthTest, uint pushConstantSize, ShaderStageFlags pushConstantStages)
     {
         var vk = Api;
-        var pushRange = new PushConstantRange(ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, 0, (uint)sizeof(PushConstants));
+        var pushRange = new PushConstantRange(pushConstantStages, 0, pushConstantSize);
         var layoutInfo = new PipelineLayoutCreateInfo
         {
             SType = StructureType.PipelineLayoutCreateInfo,
@@ -505,8 +556,8 @@ public sealed unsafe class VulkanBackend : IRenderBackend
         };
         Check(vk.CreatePipelineLayout(_device, in layoutInfo, null, out var layout), "vkCreatePipelineLayout");
 
-        var vertexModule = CreateShaderModule("clay.vert.spv");
-        var fragmentModule = CreateShaderModule("clay.frag.spv");
+        var vertexModule = CreateShaderModule($"{shader}.vert.spv");
+        var fragmentModule = CreateShaderModule($"{shader}.frag.spv");
         var entry = (byte*)SilkMarshal.StringToPtr("main");
         try
         {
@@ -541,7 +592,7 @@ public sealed unsafe class VulkanBackend : IRenderBackend
             var inputAssembly = new PipelineInputAssemblyStateCreateInfo
             {
                 SType = StructureType.PipelineInputAssemblyStateCreateInfo,
-                Topology = PrimitiveTopology.TriangleList,
+                Topology = topology,
             };
             var viewportState = new PipelineViewportStateCreateInfo
             {
@@ -566,8 +617,8 @@ public sealed unsafe class VulkanBackend : IRenderBackend
             var depthStencil = new PipelineDepthStencilStateCreateInfo
             {
                 SType = StructureType.PipelineDepthStencilStateCreateInfo,
-                DepthTestEnable = true,
-                DepthWriteEnable = true,
+                DepthTestEnable = depthTest,
+                DepthWriteEnable = depthTest,
                 DepthCompareOp = CompareOp.Less,
             };
             var blendAttachment = new PipelineColorBlendAttachmentState
@@ -696,6 +747,13 @@ public sealed unsafe class VulkanBackend : IRenderBackend
         public Vector4 ToLight;
     }
 
+    /// <summary>Must match the push_constant block in Shaders/line.vert.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct LinePushConstants
+    {
+        public Matrix4x4 ViewProjection;
+    }
+
     /// <summary>A buffer in host-visible, coherent memory, mapped for its whole life.</summary>
     private sealed class HostBuffer : IDisposable
     {
@@ -715,6 +773,7 @@ public sealed unsafe class VulkanBackend : IRenderBackend
             };
             Check(vk.CreateBuffer(owner._device, in createInfo, null, out var buffer), "vkCreateBuffer");
             Buffer = buffer;
+            Size = createInfo.Size;
             vk.GetBufferMemoryRequirements(owner._device, buffer, out var requirements);
             _memory = owner.Allocate(requirements, MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, preferred);
             Check(vk.BindBufferMemory(owner._device, buffer, _memory, 0), "vkBindBufferMemory");
@@ -724,6 +783,7 @@ public sealed unsafe class VulkanBackend : IRenderBackend
         }
 
         public VkBuffer Buffer { get; }
+        public ulong Size { get; }
         public void* Mapped { get; }
 
         public void Dispose()

@@ -99,7 +99,15 @@
               <StackPanel Spacing="4">
                 <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
                 <TextBlock Text="{Binding Geometry}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Rig}" />
                 <TextBlock Text="{Binding Source, StringFormat='Source {0}'}" TextWrapping="Wrap" Opacity="0.7" />
+              </StackPanel>
+            </DataTemplate>
+            <DataTemplate DataType="vm:SkeletonDetailsViewModel">
+              <StackPanel Spacing="4">
+                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding Summary}" />
+                <CheckBox Content="Show bones" IsChecked="{Binding ShowBones}" />
               </StackPanel>
             </DataTemplate>
           </ContentControl.DataTemplates>

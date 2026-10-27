@@ -1,4 +1,5 @@
 using Avalonia.Threading;
+using FVMeatbag.Core.Import;
 using FVMeatbag.Core.Project;
 using FVMeatbag.Graph;
 using FVMeatbag.Rendering;
@@ -43,20 +44,31 @@ public sealed class AppHost : IDisposable
     public event EventHandler<int>? GraphEvaluated;
 
     /// <summary>
-    /// First-run setup, like an installer: creates Documents/Projects and the Demo project if they
-    /// are missing, then opens Demo. Returns problems worth showing the user.
+    /// First-run setup, like an installer: creates Documents/Projects and the Demo project (with the
+    /// sample character) if they are missing, then opens Demo. Returns problems worth showing the user.
     /// </summary>
     public IReadOnlyList<string> OpenStartupProject()
     {
         try
         {
-            return OpenProject(Workspace.EnsureCreated());
+            // The sample character faces +X, so the Demo camera starts at its front.
+            var demoCamera = OrbitCameraSettings.Default with { YawDegrees = 90 };
+            return OpenProject(Workspace.EnsureCreated(SampleMeshes(), demoCamera));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException)
         {
             Scene.Show(new CharacterProject(ProjectWorkspace.DemoProjectName));
             return [$"Could not set up {Workspace.DemoDirectory}: {e.Message}. Working in memory."];
         }
+    }
+
+    /// <summary>Sample meshes shipped next to the executable (assets/Samples in the repository).</summary>
+    public static IReadOnlyList<string> SampleMeshes()
+    {
+        var folder = Path.Combine(AppContext.BaseDirectory, "Samples");
+        return Directory.Exists(folder)
+            ? [.. Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories).Where(GltfImporter.IsSupported).Order(StringComparer.Ordinal)]
+            : [];
     }
 
     public IReadOnlyList<string> OpenProject(string directory)

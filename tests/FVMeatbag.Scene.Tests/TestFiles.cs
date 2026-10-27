@@ -55,3 +55,44 @@ internal static class TestMeshes
         return path;
     }
 }
+
+internal static class TestSkinnedMeshes
+{
+    /// <summary>
+    /// Writes a .glb with a two-bone vertical "arm" (a thin box from y=0 to y=2) bound in a straight
+    /// pose. In the file's rest pose the armature is moved to <paramref name="armatureOffset"/> and
+    /// the upper bone is bent 90° around Z, so the importer must deform the mesh to match.
+    /// </summary>
+    public static string WriteBentArm(string path, Vector3 armatureOffset)
+    {
+        var mesh = new MeshBuilder<VertexPositionNormal, VertexEmpty, VertexJoints4>("Arm");
+        var primitive = mesh.UsePrimitive(MaterialBuilder.CreateDefault());
+        // Lower half weighted to bone 0, upper half to bone 1, as quads around the Y axis.
+        for (var segment = 0; segment < 2; segment++)
+        {
+            float y0 = segment, y1 = segment + 1;
+            var corners = new[] { new Vector3(-0.1f, 0, -0.1f), new Vector3(0.1f, 0, -0.1f), new Vector3(0.1f, 0, 0.1f), new Vector3(-0.1f, 0, 0.1f) };
+            for (var side = 0; side < 4; side++)
+            {
+                var a = corners[side];
+                var b = corners[(side + 1) % 4];
+                var normal = Vector3.Normalize(new Vector3(a.X + b.X, 0, a.Z + b.Z));
+                VertexBuilder<VertexPositionNormal, VertexEmpty, VertexJoints4> V(Vector3 p) =>
+                    new(new VertexPositionNormal(p, normal), default, new VertexJoints4((segment, 1f)));
+                primitive.AddQuadrangle(V(a + (Vector3.UnitY * y0)), V(b + (Vector3.UnitY * y0)), V(b + (Vector3.UnitY * y1)), V(a + (Vector3.UnitY * y1)));
+            }
+        }
+
+        var armature = new NodeBuilder("Armature").WithLocalTranslation(armatureOffset);
+        var lower = armature.CreateNode("Lower");
+        var upper = lower.CreateNode("Upper").WithLocalTranslation(Vector3.UnitY);
+        upper.WithLocalRotation(Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI / 2));
+
+        // Bind pose: straight arm at the origin, so the inverse bind matrices undo the bones' bind positions only.
+        var scene = new SceneBuilder();
+        scene.AddSkinnedMesh(mesh, [(lower, Matrix4x4.Identity), (upper, Matrix4x4.CreateTranslation(-Vector3.UnitY))]);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        scene.ToGltf2().SaveGLB(path);
+        return path;
+    }
+}

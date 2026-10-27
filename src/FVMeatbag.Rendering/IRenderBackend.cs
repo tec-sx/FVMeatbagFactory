@@ -32,8 +32,11 @@ public interface IRenderBackend : IDisposable
     void Initialize();
     void Resize(uint width, uint height);
 
-    /// <summary>Draws <paramref name="draws"/> into the offscreen target and waits until the frame is finished.</summary>
-    void RenderFrame(in FrameContext frame, IReadOnlyList<MeshDraw> draws);
+    /// <summary>
+    /// Draws <paramref name="draws"/>, then <paramref name="lines"/> on top of them, into the
+    /// offscreen target and waits until the frame is finished.
+    /// </summary>
+    void RenderFrame(in FrameContext frame, IReadOnlyList<MeshDraw> draws, IReadOnlyList<LineSegment> lines);
 
     /// <summary>
     /// Copies the last rendered frame as 8-bit BGRA rows (top row first) into

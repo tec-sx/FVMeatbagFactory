@@ -68,7 +68,9 @@ public static class ProjectFile
         foreach (var mesh in document.Meshes ?? [])
         {
             var asset = project.Meshes.Add(new SkeletalMeshAsset(mesh.Name ?? "Mesh", mesh.Path));
-            asset.Geometry = project.ResolvePath(mesh.Path).Bind(file => TryImport(file, problems));
+            var loaded = project.ResolvePath(mesh.Path).Bind(file => TryImport(file, problems));
+            asset.Geometry = loaded.Map(l => l.Geometry);
+            asset.Skeleton = loaded.Bind(l => l.Skeleton);
         }
         return project;
     }
@@ -103,16 +105,16 @@ public static class ProjectFile
         return $"{MeshesFolder}/{Path.GetFileName(target)}";
     }
 
-    private static Maybe<MeshGeometry> TryImport(string file, ICollection<string>? problems)
+    private static Maybe<LoadedMesh> TryImport(string file, ICollection<string>? problems)
     {
         try
         {
-            return GltfImporter.Load(file).Geometry;
+            return GltfImporter.Load(file);
         }
         catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or SharpGLTF.Validation.ModelException)
         {
             problems?.Add($"{Path.GetFileName(file)}: {e.Message}");
-            return Maybe<MeshGeometry>.None;
+            return Maybe<LoadedMesh>.None;
         }
     }
 

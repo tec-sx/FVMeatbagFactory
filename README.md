@@ -22,7 +22,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design.
 
 ## Using it
 
-On first start the app creates `Documents/Projects/Demo` and opens it. Every project has one
+On first start the app creates `Documents/Projects/Demo` with a rigged sample character
+([3D Male Base Mesh](assets/Samples/MaleBaseMesh/README.md), CC0) and opens it. Every project has one
 camera and one light; select them in the outliner to adjust them.
 
 - **File → Import Mesh** (Ctrl+I) loads a `.glb`/`.gltf` into the open project and places it at
@@ -30,6 +31,8 @@ camera and one light; select them in the outliner to adjust them.
   `dotnet run --project src/FVMeatbag.App -- Suzanne.glb`.
 - **File → Save** (Ctrl+S) writes `project.json`; imported files are copied into the project's
   `Meshes` folder.
+- Rigged glTF files keep their skeleton and skin weights; select a mesh's **Skeleton** in the
+  outliner to show or hide its bones.
 - Viewport: drag to orbit, right drag or Shift+drag to pan, wheel to zoom, F to frame.
 
 The viewport needs a GPU driver with Vulkan 1.2.

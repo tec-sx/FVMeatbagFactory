@@ -37,6 +37,8 @@ public sealed class SceneRoot
 
     public IEnumerable<MeshComponent> Meshes => Root.DescendantsAndSelf().OfType<MeshComponent>();
 
+    public IEnumerable<SkeletonComponent> Skeletons => Root.DescendantsAndSelf().OfType<SkeletonComponent>();
+
     public event EventHandler? SelectionChanged;
 
     /// <summary>Raised when the scene switches to another project.</summary>
@@ -67,15 +69,23 @@ public sealed class SceneRoot
         ProjectChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Adds a component that displays <paramref name="asset"/>, moved so its bounds are centered on the origin.</summary>
+    /// <summary>
+    /// Adds a component that displays <paramref name="asset"/>, moved so its bounds are centered on
+    /// the origin. Rigged meshes get a <see cref="SkeletonComponent"/> child that shows the bones.
+    /// </summary>
     public MeshComponent AddMesh(SkeletalMeshAsset asset)
     {
         ArgumentNullException.ThrowIfNull(asset);
         var center = asset.Geometry.Map(g => g.Bounds.Center).OrDefault(Vector3.Zero);
-        return Root.AddChild(new MeshComponent(asset.Name, asset.Id)
+        var mesh = new MeshComponent(asset.Name, asset.Id)
         {
             LocalTransform = Transform.Identity with { Position = -center },
-        });
+        };
+        if (asset.Skeleton.TryGetValue(out var skeleton))
+        {
+            mesh.AddChild(new SkeletonComponent(skeleton));
+        }
+        return Root.AddChild(mesh);
     }
 
     public Maybe<MeshComponent> FindMesh(Guid assetId) => Meshes.FirstOrNone(m => m.AssetId == assetId);

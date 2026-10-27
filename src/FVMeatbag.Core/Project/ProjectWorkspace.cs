@@ -1,3 +1,5 @@
+using FVMeatbag.Graph;
+
 namespace FVMeatbag.Core.Project;
 
 /// <summary>
@@ -23,13 +25,26 @@ public sealed class ProjectWorkspace(string root)
         return new ProjectWorkspace(Path.Combine(documents, "Projects"));
     }
 
-    /// <summary>Creates the projects folder and the demo project if they are missing. Returns the demo project's folder.</summary>
-    public string EnsureCreated()
+    /// <summary>
+    /// Creates the projects folder and the demo project if they are missing, copying
+    /// <paramref name="demoMeshes"/> into the new demo project and starting its camera at
+    /// <paramref name="demoCamera"/>. An existing demo project is left alone. Returns the demo
+    /// project's folder.
+    /// </summary>
+    public string EnsureCreated(IEnumerable<string>? demoMeshes = null, Maybe<OrbitCameraSettings> demoCamera = default)
     {
         Directory.CreateDirectory(Root);
         if (!ProjectFile.Exists(DemoDirectory))
         {
-            ProjectFile.Save(new CharacterProject(DemoProjectName, DemoDirectory));
+            var demo = new CharacterProject(DemoProjectName, DemoDirectory)
+            {
+                Camera = demoCamera.OrDefault(OrbitCameraSettings.Default),
+            };
+            foreach (var mesh in demoMeshes ?? [])
+            {
+                demo.Meshes.Add(new SkeletalMeshAsset(Path.GetFileNameWithoutExtension(mesh), ProjectFile.CopyIntoProject(demo, mesh)));
+            }
+            ProjectFile.Save(demo);
         }
         return DemoDirectory;
     }

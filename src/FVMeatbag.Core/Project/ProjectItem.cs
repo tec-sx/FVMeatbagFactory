@@ -57,12 +57,13 @@ public abstract class ProjectItem
 public sealed class ProjectFolder(string name) : ProjectItem(name);
 
 /// <summary>
-/// A skeletal mesh asset. Geometry only for now; skin weights, morph targets and poses are added
-/// as the import pipeline grows.
+/// A skeletal mesh asset: geometry, and for rigged meshes the skeleton and skin weights. Morph
+/// targets and poses are added as the pipeline grows.
 /// </summary>
 public sealed class SkeletalMeshAsset(string name, string? sourcePath = null) : ProjectItem(name)
 {
     private Maybe<MeshGeometry> _geometry;
+    private Maybe<Skeleton> _skeleton;
 
     /// <summary>Where the mesh was imported from: relative to the project directory when it was copied into the project.</summary>
     public string? SourcePath { get; } = sourcePath;
@@ -74,6 +75,17 @@ public sealed class SkeletalMeshAsset(string name, string? sourcePath = null) : 
         set
         {
             _geometry = value;
+            MarkModified();
+        }
+    }
+
+    /// <summary>The bones the geometry's skin weights refer to; None for a static mesh.</summary>
+    public Maybe<Skeleton> Skeleton
+    {
+        get => _skeleton;
+        set
+        {
+            _skeleton = value;
             MarkModified();
         }
     }

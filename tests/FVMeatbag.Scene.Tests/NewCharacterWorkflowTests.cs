@@ -73,6 +73,33 @@ public sealed class NewCharacterWorkflowTests : IDisposable
     }
 
     [Fact]
+    public void Importing_a_rigged_mesh_adds_a_skeleton_whose_bones_follow_the_mesh()
+    {
+        var root = Graph.Graph.CreateRoot();
+        var scene = new SceneRoot(root);
+        var project = new CharacterProject("Demo", _temp.Combine("Demo"));
+        scene.Show(project);
+        var workflow = new ImportMeshWorkflow(root, scene);
+
+        workflow.Run(TestSkinnedMeshes.WriteBentArm(_temp.Combine("Arm.glb"), new Vector3(5, 0, 0)), project);
+
+        var mesh = Assert.Single(scene.Meshes);
+        var skeleton = Assert.Single(scene.Skeletons);
+        Assert.Same(mesh, skeleton.Parent);
+        Assert.Equal(2, scene.FindAsset(mesh).Value.Skeleton.Value.Count);
+        // Lower → Upper, plus a tail for the childless Upper bone: two segments.
+        var segments = skeleton.LinesNode!.OutputValues.Segments.ToArray();
+        Assert.Equal(4, segments.Length);
+        // The mesh is centered on the origin, and the bones moved with it.
+        var elbow = Vector3.Transform(new Vector3(5, 1, 0), mesh.WorldMatrix);
+        Assert.Contains(segments, p => Vector3.Distance(p, elbow) < 1e-4f);
+
+        skeleton.Visible = false;
+
+        Assert.True(skeleton.LinesNode.OutputValues.Segments.IsEmpty);
+    }
+
+    [Fact]
     public void Importing_a_non_gltf_file_faults_and_adds_nothing()
     {
         var root = Graph.Graph.CreateRoot();
