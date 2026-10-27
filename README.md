@@ -31,11 +31,19 @@ camera and one light; select them in the outliner to adjust them.
   `dotnet run --project src/FVMeatbag.App -- Suzanne.glb`.
 - **File → Save** (Ctrl+S) writes `project.json`; imported files are copied into the project's
   `Meshes` folder.
-- Rigged glTF files keep their skeleton and skin weights; select a mesh's **Skeleton** in the
-  outliner to show or hide its bones.
-- Viewport: drag to orbit, right drag or Shift+drag to pan, wheel to zoom, F to frame.
+- Rigged glTF files keep their skeleton and skin weights. Bones are drawn Maya style: a wire
+  sphere on each joint and a pyramid to each child, colored by side (left blue, right red,
+  center yellow) or all in Maya's default blue; the selected bone turns green.
+- Click a joint or bone in the viewport, or a bone in the skeleton's tree in **Details**, to
+  select it; the other view follows. Details also has the bone size and color settings.
+- The viewport's top bar switches between wireframe, solid, solid + wireframe and shaded
+  (keys 4 to 7, as in Maya; shaded is a placeholder that draws like solid until materials
+  exist), shows or hides bones, and frames the scene.
+- Viewport: click to select a bone, drag to orbit, right drag or Shift+drag to pan, wheel to
+  zoom, F to frame.
 
-The viewport needs a GPU driver with Vulkan 1.2.
+The viewport needs a GPU driver with Vulkan 1.2. Third-party assets are listed in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Build
 

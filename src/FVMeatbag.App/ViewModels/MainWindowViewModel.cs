@@ -3,12 +3,15 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FVMeatbag.Core.Project;
 using FVMeatbag.Graph;
+using FVMeatbag.Rendering;
+using FVMeatbag.Scene;
 using FVMeatbag.Scene.Components;
 
 namespace FVMeatbag.App.ViewModels;
 
 public sealed partial class MainWindowViewModel : ViewModelBase
 {
+    private readonly List<SkeletonComponent> _watchedSkeletons = [];
     private string _message = "";
 
     [ObservableProperty]
@@ -19,6 +22,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     private DetailsViewModel? _details;
+
+    /// <summary>How the viewport draws meshes; set from the top bar.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsWireframe), nameof(IsSolid), nameof(IsSolidWireframe), nameof(IsShaded))]
+    private MeshDisplayMode _displayMode = MeshDisplayMode.Solid;
 
     public MainWindowViewModel(AppHost host)
     {
@@ -53,6 +61,44 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<SceneComponentViewModel> Outliner { get; } = [];
 
     private Maybe<CharacterProject> Project => Host.Scene.Project;
+
+    // One per top bar button; they act as a radio group, so unchecking is ignored.
+    public bool IsWireframe
+    {
+        get => DisplayMode == MeshDisplayMode.Wireframe;
+        set => SetDisplayMode(MeshDisplayMode.Wireframe, value);
+    }
+
+    public bool IsSolid
+    {
+        get => DisplayMode == MeshDisplayMode.Solid;
+        set => SetDisplayMode(MeshDisplayMode.Solid, value);
+    }
+
+    public bool IsSolidWireframe
+    {
+        get => DisplayMode == MeshDisplayMode.SolidWireframe;
+        set => SetDisplayMode(MeshDisplayMode.SolidWireframe, value);
+    }
+
+    /// <summary>Placeholder until materials exist; draws like solid.</summary>
+    public bool IsShaded
+    {
+        get => DisplayMode == MeshDisplayMode.Shaded;
+        set => SetDisplayMode(MeshDisplayMode.Shaded, value);
+    }
+
+    /// <summary>Shows or hides every skeleton's bones.</summary>
+    public bool ShowBones
+    {
+        get => Host.Scene.ShowBones;
+        set
+        {
+            Host.Scene.ShowBones = value;
+            OnPropertyChanged();
+            Details?.Refresh();
+        }
+    }
 
     [RelayCommand]
     private async Task NewProject()
@@ -132,6 +178,20 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void ResetCamera() => Host.Scene.Camera.Settings = Project.Map(p => p.Camera).OrDefault(OrbitCameraSettings.Default);
 
+    /// <summary>Keys 4 to 7, as in Maya.</summary>
+    [RelayCommand]
+    private void SetDisplayMode(MeshDisplayMode mode) => DisplayMode = mode;
+
+    private void SetDisplayMode(MeshDisplayMode mode, bool on)
+    {
+        if (on)
+        {
+            DisplayMode = mode;
+        }
+    }
+
+    partial void OnDetailsChanged(DetailsViewModel? oldValue, DetailsViewModel? newValue) => (oldValue as IDisposable)?.Dispose();
+
     partial void OnSelectedComponentChanged(SceneComponentViewModel? value)
     {
         var component = value?.Component;
@@ -151,7 +211,47 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         Outliner.Clear();
         Outliner.Add(new SceneComponentViewModel(Host.Scene.Root));
+        WatchSkeletons();
         UpdateStatus();
+    }
+
+    private void WatchSkeletons()
+    {
+        foreach (var skeleton in _watchedSkeletons)
+        {
+            skeleton.SelectedBoneChanged -= OnBoneSelected;
+        }
+        _watchedSkeletons.Clear();
+        _watchedSkeletons.AddRange(Host.Scene.Skeletons);
+        foreach (var skeleton in _watchedSkeletons)
+        {
+            skeleton.SelectedBoneChanged += OnBoneSelected;
+        }
+    }
+
+    /// <summary>A bone picked in the viewport brings its skeleton into the details panel, where the tree shows it.</summary>
+    private void OnBoneSelected(object? sender, EventArgs e)
+    {
+        if (sender is not SkeletonComponent skeleton)
+        {
+            return;
+        }
+        if (!skeleton.SelectedBone.TryGetValue(out var bone))
+        {
+            if (Host.Scene.Skeletons.All(s => s.SelectedBone.IsNone))
+            {
+                Report("No bone selected.");
+            }
+            return;
+        }
+        if (SelectedComponent?.Component != skeleton)
+        {
+            SelectedComponent = Find(Outliner, skeleton);
+        }
+        Report($"Selected bone {skeleton.Skeleton.Bones[bone].Name}.");
+
+        static SceneComponentViewModel? Find(IEnumerable<SceneComponentViewModel> items, SceneComponent component) =>
+            items.Select(i => i.Component == component ? i : Find(i.Children, component)).FirstOrDefault(i => i is not null);
     }
 
     private void Report(string message)

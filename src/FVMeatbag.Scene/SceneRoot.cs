@@ -16,6 +16,8 @@ namespace FVMeatbag.Scene;
 /// </remarks>
 public sealed class SceneRoot
 {
+    private bool _showBones = true;
+
     public SceneRoot(Graph.Graph parentGraph, string name = "Scene")
     {
         Graph = parentGraph.CreateChild(name);
@@ -38,6 +40,29 @@ public sealed class SceneRoot
     public IEnumerable<MeshComponent> Meshes => Root.DescendantsAndSelf().OfType<MeshComponent>();
 
     public IEnumerable<SkeletonComponent> Skeletons => Root.DescendantsAndSelf().OfType<SkeletonComponent>();
+
+    /// <summary>Shows or hides the bones of every skeleton, including ones added later.</summary>
+    public bool ShowBones
+    {
+        get => _showBones;
+        set
+        {
+            _showBones = value;
+            foreach (var skeleton in Skeletons)
+            {
+                skeleton.Visible = value;
+            }
+        }
+    }
+
+    /// <summary>Clears the bone selection of every skeleton.</summary>
+    public void ClearBoneSelection()
+    {
+        foreach (var skeleton in Skeletons)
+        {
+            skeleton.SelectedBone = Maybe<int>.None;
+        }
+    }
 
     public event EventHandler? SelectionChanged;
 
@@ -83,7 +108,7 @@ public sealed class SceneRoot
         };
         if (asset.Skeleton.TryGetValue(out var skeleton))
         {
-            mesh.AddChild(new SkeletonComponent(skeleton));
+            mesh.AddChild(new SkeletonComponent(skeleton) { Visible = ShowBones });
         }
         return Root.AddChild(mesh);
     }

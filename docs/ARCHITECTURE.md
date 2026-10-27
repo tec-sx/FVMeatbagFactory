@@ -183,8 +183,13 @@ rest pose the file shows (joint world × inverse bind, so armature transforms ar
 their joints become one `Skeleton` (bones ordered parents first, rest transforms, inverse bind =
 inverse rest) and each vertex keeps up to four normalized `SkinWeights`. Because the stored mesh
 is already in the rest pose, bind pose = rest pose, which keeps later posing and weight editing
-simple. A rigged mesh gets a `SkeletonComponent` child in the scene whose graph node turns the
-bones into overlay lines that follow the mesh's transform. Add mesh to project copies the source file into the project's
+simple. A rigged mesh gets a `SkeletonComponent` child in the scene. Its `BoneDisplayOperation`
+node turns the bones into Maya-style overlay lines that follow the mesh's transform: a
+three-circle wire sphere per joint (radius from the skeleton's extent × bone size) and a
+four-sided pyramid to each child, colored by side from the bone name (`.L`/`_L`/`L_`/"left",
+and the same for right) or uniformly, with the selected bone in Maya's selection green. The
+component holds the bone selection; `BonePicker` maps a viewport click to a joint (projected
+sphere plus a few pixels of slack) or, failing that, to the bone segment's parent joint. Add mesh to project copies the source file into the project's
 `Meshes` folder. Add to scene places the mesh so its bounds are centered on the origin and frames
 the camera on it.
 
@@ -239,7 +244,11 @@ and a sky/ground hemisphere ambient, no materials. It renders offscreen with 4x 
 supported, resolves into a BGRA8 image and copies it into a host-visible buffer that the
 viewport control copies into a `WriteableBitmap` (step 1 above). Frames are only rendered when
 the graph changed or the viewport resized. Back faces are lit too, since imported meshes are not
-always closed. Overlay lines (bones) are drawn last without depth testing. Shaders live in `src/FVMeatbag.Rendering.Vulkan/Shaders` as GLSL with committed
+always closed. The display modes (wireframe, solid, solid + wireframe, shaded) are a
+`FrameContext` field: wireframe redraws the meshes with polygon mode Line, depth tested
+against the solid pass but not written (so wireframe-only shows hidden edges) with a small depth
+bias; it needs the `fillModeNonSolid` device feature and falls back to solid without it. Shaded
+draws like solid until materials exist. Overlay lines (bones) are drawn last without depth testing. Shaders live in `src/FVMeatbag.Rendering.Vulkan/Shaders` as GLSL with committed
 SPIR-V. Offscreen tests render real frames on any Vulkan driver, including Mesa's software
 lavapipe, and skip when there is none.
 

@@ -87,17 +87,20 @@ public sealed class NewCharacterWorkflowTests : IDisposable
         var skeleton = Assert.Single(scene.Skeletons);
         Assert.Same(mesh, skeleton.Parent);
         Assert.Equal(2, scene.FindAsset(mesh).Value.Skeleton.Value.Count);
-        // Lower → Upper, plus a tail for the childless Upper bone: two segments.
-        var segments = skeleton.LinesNode!.OutputValues.Segments.ToArray();
-        Assert.Equal(4, segments.Length);
-        // The mesh is centered on the origin, and the bones moved with it.
+        var display = skeleton.DisplayNode!.OutputValues;
+        // The mesh is centered on the origin, and the joints moved with it.
         var elbow = Vector3.Transform(new Vector3(5, 1, 0), mesh.WorldMatrix);
-        Assert.Contains(segments, p => Vector3.Distance(p, elbow) < 1e-4f);
+        Assert.Equal(elbow, display.Joints.Span[1], Near);
+        Assert.False(display.Lines.IsEmpty);
 
         skeleton.Visible = false;
 
-        Assert.True(skeleton.LinesNode.OutputValues.Segments.IsEmpty);
+        Assert.True(skeleton.DisplayNode.OutputValues.Lines.IsEmpty);
+        Assert.True(skeleton.DisplayNode.OutputValues.Joints.IsEmpty);
     }
+
+    private static readonly IEqualityComparer<Vector3> Near =
+        EqualityComparer<Vector3>.Create((a, b) => Vector3.Distance(a, b) < 1e-4f, _ => 0);
 
     [Fact]
     public void Importing_a_non_gltf_file_faults_and_adds_nothing()

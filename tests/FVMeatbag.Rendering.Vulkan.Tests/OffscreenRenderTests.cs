@@ -64,6 +64,44 @@ public sealed class OffscreenRenderTests : IDisposable
     }
 
     [Fact]
+    public void Wireframe_draws_only_the_edges()
+    {
+        Assert.SkipUnless(_backend.SupportsWireframe, "The device cannot draw polygons as lines.");
+        var quad = Quad(Guid.NewGuid());
+
+        var pixels = Render([new MeshDraw(quad, Matrix4x4.Identity)], mode: MeshDisplayMode.Wireframe);
+        Dump(pixels, "wireframe");
+
+        Assert.Equal(Background, Pixel(pixels, 128, 100)); // inside a face, off its edges
+        Assert.Contains(Enumerable.Range(126, 5), x => Luma(Pixel(pixels, x, 128)) > 120); // the diagonal through the middle
+    }
+
+    [Fact]
+    public void Solid_wireframe_draws_dark_edges_over_the_surface()
+    {
+        Assert.SkipUnless(_backend.SupportsWireframe, "The device cannot draw polygons as lines.");
+        var quad = Quad(Guid.NewGuid());
+        var solid = Render([new MeshDraw(quad, Matrix4x4.Identity)], mode: MeshDisplayMode.Solid);
+
+        var pixels = Render([new MeshDraw(quad, Matrix4x4.Identity)], mode: MeshDisplayMode.SolidWireframe);
+        Dump(pixels, "solid_wireframe");
+
+        Assert.Equal(Pixel(solid, 128, 100), Pixel(pixels, 128, 100));
+        Assert.Contains(Enumerable.Range(126, 5), x => Luma(Pixel(pixels, x, 128)) < Luma(Pixel(solid, x, 128)) - 40);
+    }
+
+    [Fact]
+    public void Shaded_draws_like_solid_until_materials_exist()
+    {
+        var sphere = Sphere(Guid.NewGuid());
+
+        var solid = Render([new MeshDraw(sphere, Matrix4x4.Identity)], mode: MeshDisplayMode.Solid);
+        var shaded = Render([new MeshDraw(sphere, Matrix4x4.Identity)], mode: MeshDisplayMode.Shaded);
+
+        Assert.Equal(solid, shaded);
+    }
+
+    [Fact]
     public void World_matrix_moves_the_mesh()
     {
         var sphere = Sphere(Guid.NewGuid());
@@ -95,10 +133,23 @@ public sealed class OffscreenRenderTests : IDisposable
         return Render(backend, [], Size, Size, Vector3.UnitY);
     }
 
-    private byte[] Render(IReadOnlyList<MeshDraw> draws, uint width = Size, uint height = Size, Vector3? toLight = null, IReadOnlyList<LineSegment>? lines = null) =>
-        Render(_backend, draws, width, height, toLight ?? Vector3.Normalize(new Vector3(1, 1, 1)), lines);
+    private byte[] Render(
+        IReadOnlyList<MeshDraw> draws,
+        uint width = Size,
+        uint height = Size,
+        Vector3? toLight = null,
+        IReadOnlyList<LineSegment>? lines = null,
+        MeshDisplayMode mode = MeshDisplayMode.Solid) =>
+        Render(_backend, draws, width, height, toLight ?? Vector3.Normalize(new Vector3(1, 1, 1)), lines, mode);
 
-    private static byte[] Render(VulkanBackend backend, IReadOnlyList<MeshDraw> draws, uint width, uint height, Vector3 toLight, IReadOnlyList<LineSegment>? lines = null)
+    private static byte[] Render(
+        VulkanBackend backend,
+        IReadOnlyList<MeshDraw> draws,
+        uint width,
+        uint height,
+        Vector3 toLight,
+        IReadOnlyList<LineSegment>? lines = null,
+        MeshDisplayMode mode = MeshDisplayMode.Solid)
     {
         var frame = new FrameContext(
             width,
@@ -107,7 +158,8 @@ public sealed class OffscreenRenderTests : IDisposable
             Matrix4x4.CreatePerspectiveFieldOfView(float.DegreesToRadians(40), (float)width / height, 0.01f, 100f),
             toLight,
             new Vector3(3f),
-            0);
+            0,
+            mode);
         backend.RenderFrame(frame, draws, lines ?? []);
         var pixels = new byte[width * height * 4];
         var handle = GCHandle.Alloc(pixels, GCHandleType.Pinned);
@@ -135,6 +187,14 @@ public sealed class OffscreenRenderTests : IDisposable
             Directory.CreateDirectory(folder);
             File.WriteAllBytes(Path.Combine(folder, $"{name}_{Size}x{Size}.bgra"), pixels);
         }
+    }
+
+    /// <summary>A 2×2 square facing +Z, split along the diagonal from its lower left to its upper right corner.</summary>
+    private static RenderMesh Quad(Guid id)
+    {
+        Vector3[] positions = [new(-1, -1, 0), new(1, -1, 0), new(1, 1, 0), new(-1, 1, 0)];
+        Vector3[] normals = [Vector3.UnitZ, Vector3.UnitZ, Vector3.UnitZ, Vector3.UnitZ];
+        return new RenderMesh(id, 1, positions, normals, new uint[] { 0, 1, 2, 0, 2, 3 });
     }
 
     private static RenderMesh Sphere(Guid id, long version = 1, float radius = 1f, int rings = 24, int segments = 48)

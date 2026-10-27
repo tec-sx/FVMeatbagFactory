@@ -12,8 +12,10 @@ namespace FVMeatbag.Rendering.Vulkan;
 /// presentation plan in docs/ARCHITECTURE.md; zero-copy sharing with Avalonia comes later.
 /// </summary>
 /// <remarks>
-/// Shading is untextured "clay": one directional light plus a hemisphere ambient. Overlay lines
-/// (bones) are drawn last, without depth testing, so they show through the mesh. Frames are
+/// Shading is untextured "clay": one directional light plus a hemisphere ambient. The wireframe
+/// display modes draw the same meshes again with polygon mode Line (needs the
+/// <c>fillModeNonSolid</c> feature; without it they fall back to solid). Overlay lines (bones)
+/// are drawn last, without depth testing, so they show through the mesh. Frames are
 /// rendered synchronously (submit, then wait), which keeps resource lifetimes trivial while the
 /// renderer is small.
 /// </remarks>
@@ -21,6 +23,12 @@ public sealed unsafe class VulkanBackend : IRenderBackend
 {
     private const Format ColorFormat = Format.B8G8R8A8Unorm;
     private static readonly Vector4 ClearColor = new(0.13f, 0.13f, 0.14f, 1f);
+
+    /// <summary>Edge color when only the wireframe is drawn.</summary>
+    internal static readonly Vector4 WireColor = new(0.70f, 0.72f, 0.78f, 1f);
+
+    /// <summary>Edge color on top of solid surfaces.</summary>
+    internal static readonly Vector4 WireOnSolidColor = new(0.08f, 0.08f, 0.10f, 1f);
 
     private readonly Dictionary<Guid, GpuMesh> _meshes = [];
     private Vk? _vk;
@@ -39,6 +47,8 @@ public sealed unsafe class VulkanBackend : IRenderBackend
     private Pipeline _pipeline;
     private PipelineLayout _linePipelineLayout;
     private Pipeline _linePipeline;
+    private PipelineLayout _wirePipelineLayout;
+    private Pipeline _wirePipeline;
     private HostBuffer? _lineVertices;
     private RenderTarget? _target;
 
@@ -52,6 +62,9 @@ public sealed unsafe class VulkanBackend : IRenderBackend
 
     /// <summary>MSAA sample count in use, once initialized.</summary>
     public int SampleCount => (int)_samples;
+
+    /// <summary>False if the GPU cannot rasterize polygons as lines; wireframe modes then draw solid.</summary>
+    public bool SupportsWireframe { get; private set; }
 
     public void Initialize()
     {
@@ -68,7 +81,9 @@ public sealed unsafe class VulkanBackend : IRenderBackend
             DeviceName = SilkMarshal.PtrToString((nint)properties.DeviceName) ?? "GPU";
             _samples = PickSampleCount(properties.Limits);
             _depthFormat = PickDepthFormat(vk, _physicalDevice);
-            _device = CreateDevice(vk, _physicalDevice, _queueFamily);
+            vk.GetPhysicalDeviceFeatures(_physicalDevice, out var features);
+            SupportsWireframe = features.FillModeNonSolid;
+            _device = CreateDevice(vk, _physicalDevice, _queueFamily, SupportsWireframe);
             vk.GetDeviceQueue(_device, _queueFamily, 0, out _queue);
             _vk = vk;
             CreateCommandObjects();
@@ -77,6 +92,14 @@ public sealed unsafe class VulkanBackend : IRenderBackend
                 "clay", PrimitiveTopology.TriangleList, depthTest: true, (uint)sizeof(PushConstants), ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit);
             (_linePipelineLayout, _linePipeline) = CreatePipeline(
                 "line", PrimitiveTopology.LineList, depthTest: false, (uint)sizeof(LinePushConstants), ShaderStageFlags.VertexBit);
+            if (SupportsWireframe)
+            {
+                // Tested against the solid pass but not written, so wireframe-only shows hidden edges
+                // too; the bias pulls edges in front of the faces they belong to.
+                (_wirePipelineLayout, _wirePipeline) = CreatePipeline(
+                    "wire", PrimitiveTopology.TriangleList, depthTest: true, (uint)sizeof(WirePushConstants), ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit,
+                    PolygonMode.Line, depthWrite: false, depthBias: true);
+            }
         }
         catch
         {
@@ -139,33 +162,18 @@ public sealed unsafe class VulkanBackend : IRenderBackend
         var scissor = new Rect2D(new Offset2D(0, 0), new Extent2D(target.Width, target.Height));
         vk.CmdSetViewport(_commandBuffer, 0, 1, in viewport);
         vk.CmdSetScissor(_commandBuffer, 0, 1, in scissor);
-        vk.CmdBindPipeline(_commandBuffer, PipelineBindPoint.Graphics, _pipeline);
 
         // System.Numerics clip space is +Y up; Vulkan's is +Y down.
         var viewProjection = frame.View * frame.Projection * Matrix4x4.CreateScale(1, -1, 1);
-        var radiance = frame.LightRadiance;
-        foreach (var draw in draws)
+        var wire = SupportsWireframe && frame.DisplayMode is MeshDisplayMode.Wireframe or MeshDisplayMode.SolidWireframe;
+        var solid = !wire || frame.DisplayMode != MeshDisplayMode.Wireframe;
+        if (solid)
         {
-            var mesh = _meshes[draw.Mesh.Id];
-            if (mesh.IndexCount == 0)
-            {
-                continue;
-            }
-            var normal = Matrix4x4.Invert(draw.World, out var inverse) ? Matrix4x4.Transpose(inverse) : Matrix4x4.Identity;
-            var push = new PushConstants
-            {
-                WorldViewProjection = draw.World * viewProjection,
-                NormalRow0 = new Vector4(normal.M11, normal.M12, normal.M13, radiance.X),
-                NormalRow1 = new Vector4(normal.M21, normal.M22, normal.M23, radiance.Y),
-                NormalRow2 = new Vector4(normal.M31, normal.M32, normal.M33, radiance.Z),
-                ToLight = new Vector4(frame.DirectionToLight, 0),
-            };
-            vk.CmdPushConstants(_commandBuffer, _pipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, 0, (uint)sizeof(PushConstants), &push);
-            ulong offset = 0;
-            var vertexBuffer = mesh.Vertices.Buffer;
-            vk.CmdBindVertexBuffers(_commandBuffer, 0, 1, &vertexBuffer, &offset);
-            vk.CmdBindIndexBuffer(_commandBuffer, mesh.Indices.Buffer, 0, IndexType.Uint32);
-            vk.CmdDrawIndexed(_commandBuffer, mesh.IndexCount, 1, 0, 0, 0);
+            DrawSolid(frame, draws, viewProjection);
+        }
+        if (wire)
+        {
+            DrawWire(draws, viewProjection, solid ? WireOnSolidColor : WireColor);
         }
         DrawLines(lines, viewProjection);
         vk.CmdEndRenderPass(_commandBuffer);
@@ -209,6 +217,61 @@ public sealed unsafe class VulkanBackend : IRenderBackend
         }
     }
 
+    /// <summary>Draws the meshes as lit clay with the solid pipeline.</summary>
+    private void DrawSolid(in FrameContext frame, IReadOnlyList<MeshDraw> draws, Matrix4x4 viewProjection)
+    {
+        var vk = Api;
+        vk.CmdBindPipeline(_commandBuffer, PipelineBindPoint.Graphics, _pipeline);
+        var radiance = frame.LightRadiance;
+        foreach (var draw in draws)
+        {
+            var mesh = _meshes[draw.Mesh.Id];
+            if (mesh.IndexCount == 0)
+            {
+                continue;
+            }
+            var normal = Matrix4x4.Invert(draw.World, out var inverse) ? Matrix4x4.Transpose(inverse) : Matrix4x4.Identity;
+            var push = new PushConstants
+            {
+                WorldViewProjection = draw.World * viewProjection,
+                NormalRow0 = new Vector4(normal.M11, normal.M12, normal.M13, radiance.X),
+                NormalRow1 = new Vector4(normal.M21, normal.M22, normal.M23, radiance.Y),
+                NormalRow2 = new Vector4(normal.M31, normal.M32, normal.M33, radiance.Z),
+                ToLight = new Vector4(frame.DirectionToLight, 0),
+            };
+            vk.CmdPushConstants(_commandBuffer, _pipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, 0, (uint)sizeof(PushConstants), &push);
+            DrawMesh(mesh);
+        }
+    }
+
+    /// <summary>Draws the meshes' triangle edges with the wire pipeline.</summary>
+    private void DrawWire(IReadOnlyList<MeshDraw> draws, Matrix4x4 viewProjection, Vector4 color)
+    {
+        var vk = Api;
+        vk.CmdBindPipeline(_commandBuffer, PipelineBindPoint.Graphics, _wirePipeline);
+        foreach (var draw in draws)
+        {
+            var mesh = _meshes[draw.Mesh.Id];
+            if (mesh.IndexCount == 0)
+            {
+                continue;
+            }
+            var push = new WirePushConstants { WorldViewProjection = draw.World * viewProjection, Color = color };
+            vk.CmdPushConstants(_commandBuffer, _wirePipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, 0, (uint)sizeof(WirePushConstants), &push);
+            DrawMesh(mesh);
+        }
+    }
+
+    private void DrawMesh(GpuMesh mesh)
+    {
+        var vk = Api;
+        ulong offset = 0;
+        var vertexBuffer = mesh.Vertices.Buffer;
+        vk.CmdBindVertexBuffers(_commandBuffer, 0, 1, &vertexBuffer, &offset);
+        vk.CmdBindIndexBuffer(_commandBuffer, mesh.Indices.Buffer, 0, IndexType.Uint32);
+        vk.CmdDrawIndexed(_commandBuffer, mesh.IndexCount, 1, 0, 0, 0);
+    }
+
     public void CopyPixels(nint destination, int rowBytes)
     {
         if (_target is not { } target)
@@ -242,6 +305,8 @@ public sealed unsafe class VulkanBackend : IRenderBackend
             _target = null;
             _lineVertices?.Dispose();
             _lineVertices = null;
+            vk.DestroyPipeline(_device, _wirePipeline, null);
+            vk.DestroyPipelineLayout(_device, _wirePipelineLayout, null);
             vk.DestroyPipeline(_device, _linePipeline, null);
             vk.DestroyPipelineLayout(_device, _linePipelineLayout, null);
             vk.DestroyPipeline(_device, _pipeline, null);
@@ -371,7 +436,7 @@ public sealed unsafe class VulkanBackend : IRenderBackend
         throw new InvalidOperationException("The GPU supports no depth buffer format.");
     }
 
-    private static Device CreateDevice(Vk vk, PhysicalDevice physicalDevice, uint queueFamily)
+    private static Device CreateDevice(Vk vk, PhysicalDevice physicalDevice, uint queueFamily, bool wireframe)
     {
         var priority = 1f;
         var queueInfo = new DeviceQueueCreateInfo
@@ -381,7 +446,7 @@ public sealed unsafe class VulkanBackend : IRenderBackend
             QueueCount = 1,
             PQueuePriorities = &priority,
         };
-        var features = new PhysicalDeviceFeatures();
+        var features = new PhysicalDeviceFeatures { FillModeNonSolid = wireframe };
         var createInfo = new DeviceCreateInfo
         {
             SType = StructureType.DeviceCreateInfo,
@@ -544,7 +609,14 @@ public sealed unsafe class VulkanBackend : IRenderBackend
     /// names the embedded <c>.vert.spv</c>/<c>.frag.spv</c> pair.
     /// </summary>
     private (PipelineLayout Layout, Pipeline Pipeline) CreatePipeline(
-        string shader, PrimitiveTopology topology, bool depthTest, uint pushConstantSize, ShaderStageFlags pushConstantStages)
+        string shader,
+        PrimitiveTopology topology,
+        bool depthTest,
+        uint pushConstantSize,
+        ShaderStageFlags pushConstantStages,
+        PolygonMode polygonMode = PolygonMode.Fill,
+        bool? depthWrite = null,
+        bool depthBias = false)
     {
         var vk = Api;
         var pushRange = new PushConstantRange(pushConstantStages, 0, pushConstantSize);
@@ -604,10 +676,13 @@ public sealed unsafe class VulkanBackend : IRenderBackend
             var rasterization = new PipelineRasterizationStateCreateInfo
             {
                 SType = StructureType.PipelineRasterizationStateCreateInfo,
-                PolygonMode = PolygonMode.Fill,
+                PolygonMode = polygonMode,
                 CullMode = CullModeFlags.None,
                 FrontFace = FrontFace.CounterClockwise,
                 LineWidth = 1f,
+                DepthBiasEnable = depthBias,
+                DepthBiasConstantFactor = depthBias ? -1f : 0f,
+                DepthBiasSlopeFactor = depthBias ? -1f : 0f,
             };
             var multisample = new PipelineMultisampleStateCreateInfo
             {
@@ -618,8 +693,8 @@ public sealed unsafe class VulkanBackend : IRenderBackend
             {
                 SType = StructureType.PipelineDepthStencilStateCreateInfo,
                 DepthTestEnable = depthTest,
-                DepthWriteEnable = depthTest,
-                DepthCompareOp = CompareOp.Less,
+                DepthWriteEnable = depthWrite ?? depthTest,
+                DepthCompareOp = depthBias ? CompareOp.LessOrEqual : CompareOp.Less,
             };
             var blendAttachment = new PipelineColorBlendAttachmentState
             {
@@ -752,6 +827,14 @@ public sealed unsafe class VulkanBackend : IRenderBackend
     private struct LinePushConstants
     {
         public Matrix4x4 ViewProjection;
+    }
+
+    /// <summary>Must match the push_constant block in Shaders/wire.vert and wire.frag.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WirePushConstants
+    {
+        public Matrix4x4 WorldViewProjection;
+        public Vector4 Color;
     }
 
     /// <summary>A buffer in host-visible, coherent memory, mapped for its whole life.</summary>

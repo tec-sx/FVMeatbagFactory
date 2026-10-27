@@ -9,4 +9,6 @@ glslangValidator -V clay.vert -o clay.vert.spv
 glslangValidator -V clay.frag -o clay.frag.spv
 glslangValidator -V line.vert -o line.vert.spv
 glslangValidator -V line.frag -o line.frag.spv
+glslangValidator -V wire.vert -o wire.vert.spv
+glslangValidator -V wire.frag -o wire.frag.spv
 ```

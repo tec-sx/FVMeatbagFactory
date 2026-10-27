@@ -4,16 +4,41 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:FVMeatbag.App.ViewModels"
         xmlns:views="using:FVMeatbag.App.Views"
+        xmlns:rendering="using:FVMeatbag.Rendering"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="FVMeatbag.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="FV Meatbag Factory"
         Width="1280" Height="800">
+  <Window.Styles>
+    <Style Selector="RadioButton.tool, ToggleButton.tool, Button.tool">
+      <Setter Property="Width" Value="34" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="RadioButton.tool PathIcon, ToggleButton.tool PathIcon, Button.tool PathIcon">
+      <Setter Property="Width" Value="18" />
+      <Setter Property="Height" Value="18" />
+    </Style>
+    <Style Selector="TextBlock.selectedBone">
+      <!-- Maya's lead-selection green, as in the viewport. -->
+      <Setter Property="Foreground" Value="#42FFA3" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+  </Window.Styles>
+
   <Window.KeyBindings>
     <KeyBinding Gesture="Ctrl+N" Command="{Binding NewProjectCommand}" />
     <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenProjectCommand}" />
     <KeyBinding Gesture="Ctrl+I" Command="{Binding ImportMeshCommand}" />
     <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+    <KeyBinding Gesture="D4" Command="{Binding SetDisplayModeCommand}" CommandParameter="{x:Static rendering:MeshDisplayMode.Wireframe}" />
+    <KeyBinding Gesture="D5" Command="{Binding SetDisplayModeCommand}" CommandParameter="{x:Static rendering:MeshDisplayMode.Solid}" />
+    <KeyBinding Gesture="D6" Command="{Binding SetDisplayModeCommand}" CommandParameter="{x:Static rendering:MeshDisplayMode.SolidWireframe}" />
+    <KeyBinding Gesture="D7" Command="{Binding SetDisplayModeCommand}" CommandParameter="{x:Static rendering:MeshDisplayMode.Shaded}" />
   </Window.KeyBindings>
 
   <DockPanel>
@@ -36,7 +61,7 @@
       <TextBlock Text="{Binding Status}" FontSize="12" TextTrimming="CharacterEllipsis" />
     </Border>
 
-    <Grid ColumnDefinitions="260,4,*,4,300">
+    <Grid ColumnDefinitions="260,4,*,4,320">
       <DockPanel Grid.Column="0">
         <TextBlock DockPanel.Dock="Top" Text="Outliner" Margin="8" FontWeight="SemiBold" />
         <TreeView ItemsSource="{Binding Outliner}" SelectedItem="{Binding SelectedComponent}">
@@ -55,12 +80,43 @@
 
       <GridSplitter Grid.Column="1" ResizeDirection="Columns" />
 
-      <Panel Grid.Column="2">
-        <views:ViewportControl Host="{Binding Host}" />
-        <TextBlock Text="Drag: orbit · Right drag / Shift+drag: pan · Wheel: zoom · F: frame"
-                   HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8"
-                   FontSize="11" Opacity="0.45" IsHitTestVisible="False" />
-      </Panel>
+      <DockPanel Grid.Column="2">
+        <!-- Viewport top bar. Display modes act as a radio group. -->
+        <Border DockPanel.Dock="Top" Background="#2A2A2E" Padding="6,3">
+          <StackPanel Orientation="Horizontal" Spacing="2">
+            <RadioButton Classes="tool" Theme="{StaticResource {x:Type ToggleButton}}" GroupName="DisplayMode"
+                         IsChecked="{Binding IsWireframe}" ToolTip.Tip="Wireframe (4)">
+              <PathIcon Data="{StaticResource Icon.Wireframe}" />
+            </RadioButton>
+            <RadioButton Classes="tool" Theme="{StaticResource {x:Type ToggleButton}}" GroupName="DisplayMode"
+                         IsChecked="{Binding IsSolid}" ToolTip.Tip="Solid (5)">
+              <PathIcon Data="{StaticResource Icon.Solid}" />
+            </RadioButton>
+            <RadioButton Classes="tool" Theme="{StaticResource {x:Type ToggleButton}}" GroupName="DisplayMode"
+                         IsChecked="{Binding IsSolidWireframe}" ToolTip.Tip="Solid with wireframe (6)">
+              <PathIcon Data="{StaticResource Icon.SolidWireframe}" />
+            </RadioButton>
+            <RadioButton Classes="tool" Theme="{StaticResource {x:Type ToggleButton}}" GroupName="DisplayMode"
+                         IsChecked="{Binding IsShaded}" ToolTip.Tip="Shaded (7). Placeholder: draws like Solid until materials exist.">
+              <PathIcon Data="{StaticResource Icon.Shaded}" />
+            </RadioButton>
+            <Rectangle Width="1" Margin="6,4" Fill="#505056" />
+            <ToggleButton Classes="tool" IsChecked="{Binding ShowBones}" ToolTip.Tip="Show bones">
+              <PathIcon Data="{StaticResource Icon.Bones}" />
+            </ToggleButton>
+            <Rectangle Width="1" Margin="6,4" Fill="#505056" />
+            <Button Classes="tool" Command="{Binding FrameAllCommand}" ToolTip.Tip="Frame all (F)">
+              <PathIcon Data="{StaticResource Icon.FrameAll}" />
+            </Button>
+          </StackPanel>
+        </Border>
+        <Panel>
+          <views:ViewportControl Host="{Binding Host}" DisplayMode="{Binding DisplayMode}" />
+          <TextBlock Text="Click: select bone · Drag: orbit · Right drag / Shift+drag: pan · Wheel: zoom · F: frame"
+                     HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8"
+                     FontSize="11" Opacity="0.45" IsHitTestVisible="False" />
+        </Panel>
+      </DockPanel>
 
       <GridSplitter Grid.Column="3" ResizeDirection="Columns" />
 
@@ -104,11 +160,43 @@
               </StackPanel>
             </DataTemplate>
             <DataTemplate DataType="vm:SkeletonDetailsViewModel">
-              <StackPanel Spacing="4">
-                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
-                <TextBlock Text="{Binding Summary}" />
-                <CheckBox Content="Show bones" IsChecked="{Binding ShowBones}" />
-              </StackPanel>
+              <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="0,0,0,8">
+                <StackPanel Grid.Row="0" Spacing="4">
+                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Summary}" />
+                  <CheckBox Content="Show bones" IsChecked="{Binding ShowBones}" />
+                  <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Reset" Command="{Binding ResetBoneSizeCommand}" Padding="8,2" />
+                    <TextBlock Text="{Binding BoneSize, StringFormat='Bone size {0:0.##}'}" VerticalAlignment="Center" />
+                  </DockPanel>
+                  <Slider Minimum="0.1" Maximum="5" Value="{Binding BoneSize}" />
+                  <TextBlock Text="Bone colors" />
+                  <ComboBox ItemsSource="{Binding ColorModes}" SelectedIndex="{Binding ColorModeIndex}" HorizontalAlignment="Stretch" />
+                </StackPanel>
+                <DockPanel Grid.Row="1" Margin="0,12,0,4">
+                  <Button DockPanel.Dock="Right" Content="Deselect" Command="{Binding ClearSelectionCommand}" Padding="8,2" />
+                  <TextBlock Text="Bones" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </DockPanel>
+                <Border Grid.Row="2" BorderBrush="#3A3A3E" BorderThickness="1" CornerRadius="3">
+                  <TreeView ItemsSource="{Binding Bones}" SelectedItem="{Binding SelectedBone}">
+                    <TreeView.ItemTemplate>
+                      <TreeDataTemplate DataType="vm:BoneNodeViewModel" ItemsSource="{Binding Children}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <Ellipse Width="8" Height="8" Fill="{Binding Color}" VerticalAlignment="Center" />
+                          <TextBlock Text="{Binding Name}" Classes.selectedBone="{Binding IsHighlighted}" />
+                        </StackPanel>
+                      </TreeDataTemplate>
+                    </TreeView.ItemTemplate>
+                    <TreeView.Styles>
+                      <Style Selector="TreeViewItem" x:DataType="vm:BoneNodeViewModel">
+                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                        <Setter Property="MinHeight" Value="24" />
+                      </Style>
+                    </TreeView.Styles>
+                  </TreeView>
+                </Border>
+                <TextBlock Grid.Row="3" Text="{Binding SelectedBoneInfo}" TextWrapping="Wrap" Margin="0,8,0,0" Opacity="0.85" />
+              </Grid>
             </DataTemplate>
           </ContentControl.DataTemplates>
         </ContentControl>

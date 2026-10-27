@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using FVMeatbag.Graph;
 using FVMeatbag.Rendering;
 using FVMeatbag.Scene;
 using LineSegment = FVMeatbag.Rendering.LineSegment;
@@ -18,7 +19,10 @@ namespace FVMeatbag.App.Views;
 /// The backend renders offscreen; each frame is copied into a <see cref="WriteableBitmap"/>
 /// (presentation step 1 in docs/ARCHITECTURE.md). A frame is only rendered when the graph changed
 /// or the control was resized.
-/// <para>Mouse: left or middle drag orbits, right drag or Shift+drag pans, the wheel zooms, F frames the scene.</para>
+/// <para>
+/// Mouse: a left click selects the bone under the cursor (or clears the bone selection), left or
+/// middle drag orbits, right drag or Shift+drag pans, the wheel zooms, F frames the scene.
+/// </para>
 /// </remarks>
 [SuppressMessage("Design", "CA1001", Justification = "The bitmap is released when the control leaves the visual tree, which is the lifetime Avalonia gives controls.")]
 public sealed class ViewportControl : Control
@@ -26,15 +30,22 @@ public sealed class ViewportControl : Control
     public static readonly StyledProperty<AppHost?> HostProperty =
         AvaloniaProperty.Register<ViewportControl, AppHost?>(nameof(Host));
 
+    public static readonly StyledProperty<MeshDisplayMode> DisplayModeProperty =
+        AvaloniaProperty.Register<ViewportControl, MeshDisplayMode>(nameof(DisplayMode), MeshDisplayMode.Solid);
+
     private const float OrbitDegreesPerPixel = 0.4f;
-    private static readonly System.Numerics.Vector3 BoneColor = new(1f, 0.6f, 0.15f);
+
+    /// <summary>A press and release closer than this, in pixels, is a click rather than a drag.</summary>
+    private const double ClickSlop = 3;
     private static readonly IBrush Background = new SolidColorBrush(Color.FromRgb(0x21, 0x21, 0x24));
 
     private WriteableBitmap? _bitmap;
     private bool _dirty;
     private string? _error;
     private Point _lastPointer;
+    private Point _pressPointer;
     private bool _dragging;
+    private bool _clickCandidate;
 
     public ViewportControl()
     {
@@ -46,6 +57,12 @@ public sealed class ViewportControl : Control
     {
         get => GetValue(HostProperty);
         set => SetValue(HostProperty, value);
+    }
+
+    public MeshDisplayMode DisplayMode
+    {
+        get => GetValue(DisplayModeProperty);
+        set => SetValue(DisplayModeProperty, value);
     }
 
     public override void Render(DrawingContext context)
@@ -89,6 +106,10 @@ public sealed class ViewportControl : Control
             UpdateAspectRatio();
             RequestFrame();
         }
+        else if (change.Property == DisplayModeProperty)
+        {
+            RequestFrame();
+        }
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -97,6 +118,8 @@ public sealed class ViewportControl : Control
         base.OnPointerPressed(e);
         Focus();
         _lastPointer = e.GetPosition(this);
+        _pressPointer = _lastPointer;
+        _clickCandidate = e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && !e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         _dragging = true;
         e.Pointer.Capture(this);
         e.Handled = true;
@@ -108,6 +131,11 @@ public sealed class ViewportControl : Control
         base.OnPointerReleased(e);
         _dragging = false;
         e.Pointer.Capture(null);
+        if (_clickCandidate && e.InitialPressMouseButton == MouseButton.Left)
+        {
+            PickBone(e.GetPosition(this));
+        }
+        _clickCandidate = false;
     }
 
     protected override void OnPointerMoved(PointerEventArgs e)
@@ -121,6 +149,12 @@ public sealed class ViewportControl : Control
         var position = e.GetPosition(this);
         var delta = position - _lastPointer;
         _lastPointer = position;
+        var moved = position - _pressPointer;
+        if (_clickCandidate && Math.Abs(moved.X) + Math.Abs(moved.Y) <= ClickSlop)
+        {
+            return; // may still be a click; start orbiting once the pointer really moves
+        }
+        _clickCandidate = false;
 
         var properties = e.GetCurrentPoint(this).Properties;
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
@@ -163,6 +197,29 @@ public sealed class ViewportControl : Control
     }
 
     private void OnGraphEvaluated(object? sender, int evaluated) => RequestFrame();
+
+    /// <summary>Selects the bone under <paramref name="point"/>, or clears the bone selection when there is none.</summary>
+    private void PickBone(Point point)
+    {
+        if (Host?.Scene is not { } scene || Bounds.Width <= 0 || Bounds.Height <= 0)
+        {
+            return;
+        }
+        var camera = scene.Camera.CameraNode!.OutputValues;
+        var size = new System.Numerics.Vector2((float)Bounds.Width, (float)Bounds.Height);
+        var pick = BonePicker.Pick(scene, camera.View * camera.Projection, size, new System.Numerics.Vector2((float)point.X, (float)point.Y));
+        foreach (var skeleton in scene.Skeletons)
+        {
+            if (!pick.TryGetValue(out var hit) || hit.Skeleton != skeleton)
+            {
+                skeleton.SelectedBone = Maybe<int>.None;
+            }
+        }
+        if (pick.TryGetValue(out var picked))
+        {
+            picked.Skeleton.SelectedBone = Maybe<int>.Some(picked.Bone);
+        }
+    }
 
     private void UpdateAspectRatio()
     {
@@ -223,11 +280,11 @@ public sealed class ViewportControl : Control
         InvalidateVisual();
     }
 
-    private static FrameContext BuildFrame(SceneRoot scene, uint width, uint height)
+    private FrameContext BuildFrame(SceneRoot scene, uint width, uint height)
     {
         var camera = scene.Camera.CameraNode!.OutputValues;
         var light = scene.Light.LightNode!.OutputValues;
-        return new FrameContext(width, height, camera.View, camera.Projection, light.DirectionToLight, light.Radiance, 0);
+        return new FrameContext(width, height, camera.View, camera.Projection, light.DirectionToLight, light.Radiance, 0, DisplayMode);
     }
 
     private static List<LineSegment> BuildLines(SceneRoot scene)
@@ -235,14 +292,13 @@ public sealed class ViewportControl : Control
         var lines = new List<LineSegment>();
         foreach (var skeleton in scene.Skeletons)
         {
-            if (skeleton.LinesNode is not { } node)
+            if (skeleton.DisplayNode is not { } node)
             {
                 continue;
             }
-            var points = node.OutputValues.Segments.Span;
-            for (var i = 0; i + 1 < points.Length; i += 2)
+            foreach (var line in node.OutputValues.Lines.Span)
             {
-                lines.Add(new LineSegment(points[i], points[i + 1], BoneColor));
+                lines.Add(new LineSegment(line.From, line.To, line.Color));
             }
         }
         return lines;
