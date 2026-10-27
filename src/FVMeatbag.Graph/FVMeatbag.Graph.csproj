@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Standalone node-graph runtime. Must stay free of UI, rendering and app dependencies. -->
+  <PropertyGroup>
+    <RootNamespace>FVMeatbag.Graph</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <IsAotCompatible>false</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="FVMeatbag.Graph.Tests" />
+  </ItemGroup>
+</Project>

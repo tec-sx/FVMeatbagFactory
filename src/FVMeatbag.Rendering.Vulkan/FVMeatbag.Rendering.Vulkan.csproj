@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Vulkan backend on Silk.NET. -->
+  <PropertyGroup>
+    <RootNamespace>FVMeatbag.Rendering.Vulkan</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.Vulkan" />
+    <PackageReference Include="Silk.NET.Vulkan.Extensions.KHR" />
+    <PackageReference Include="Silk.NET.Vulkan.Extensions.EXT" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\FVMeatbag.Rendering\FVMeatbag.Rendering.csproj" />
+  </ItemGroup>
+</Project>

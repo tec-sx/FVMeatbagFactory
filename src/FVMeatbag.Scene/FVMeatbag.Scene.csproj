@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Visual representation only: scene components display project data and own behaviour graphs. -->
+  <PropertyGroup>
+    <RootNamespace>FVMeatbag.Scene</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="FVMeatbag.Scene.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\FVMeatbag.Graph\FVMeatbag.Graph.csproj" />
+    <ProjectReference Include="..\FVMeatbag.Core\FVMeatbag.Core.csproj" />
+  </ItemGroup>
+</Project>

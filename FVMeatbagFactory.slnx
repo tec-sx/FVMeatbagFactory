@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FVMeatbag.App/FVMeatbag.App.csproj" />
+    <Project Path="src/FVMeatbag.Core/FVMeatbag.Core.csproj" />
+    <Project Path="src/FVMeatbag.Graph/FVMeatbag.Graph.csproj" />
+    <Project Path="src/FVMeatbag.Rendering.Vulkan/FVMeatbag.Rendering.Vulkan.csproj" />
+    <Project Path="src/FVMeatbag.Rendering/FVMeatbag.Rendering.csproj" />
+    <Project Path="src/FVMeatbag.Scene/FVMeatbag.Scene.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FVMeatbag.Graph.Tests/FVMeatbag.Graph.Tests.csproj" />
+    <Project Path="tests/FVMeatbag.Scene.Tests/FVMeatbag.Scene.Tests.csproj" />
+  </Folder>
+</Solution>

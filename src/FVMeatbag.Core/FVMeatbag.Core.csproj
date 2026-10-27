@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Document model: the project hierarchy that holds the actual data (meshes, skeletons, morphs, poses). -->
+  <PropertyGroup>
+    <RootNamespace>FVMeatbag.Core</RootNamespace>
+  </PropertyGroup>
+</Project>
