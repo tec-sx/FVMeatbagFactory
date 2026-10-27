@@ -21,6 +21,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         _host = host;
         _host.GraphEvaluated += (_, count) => Status = $"{ProjectLabel} | graphs: {GraphCount} | last frame evaluated {count} node(s)";
+        _host.NewCharacter.AddToScene.OutputsChanged += (_, _) =>
+        {
+            _project = _host.NewCharacter.CreateProject.OutputValues.Project;
+            RefreshOutliner();
+        };
         RefreshOutliner();
     }
 
@@ -34,15 +39,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private string ProjectLabel => _project?.Name ?? "No project";
     private int GraphCount => _host.RootGraph.DescendantsAndSelf().Count();
 
-    // Placeholder until the "create project" / "load mesh" flow is built from nodes.
+    // Runs load mesh → create project → add to scene. The path is a placeholder until there is a file dialog.
     [RelayCommand]
-    private void NewProject()
-    {
-        _project = new CharacterProject($"Character {DateTime.Now:HHmmss}");
-        var asset = _project.Meshes.Add(new SkeletalMeshAsset("BaseBody"));
-        _host.Scene.Root.AddChild(new MeshComponent(asset.Name, asset.Id));
-        RefreshOutliner();
-    }
+    private void NewProject() =>
+        _host.NewCharacter.Run("BaseBody.fbx", $"Character {DateTime.Now:HHmmss}");
 
     partial void OnSelectedComponentChanged(SceneComponentViewModel? value) =>
         _host.Scene.Select(value?.Component is GizmoComponent or null ? null : value.Component);

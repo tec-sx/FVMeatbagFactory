@@ -22,11 +22,23 @@ public class Node<TIn, TOut> : Node
         _input = initialInput;
         Inputs = PortSchema<TIn>.Fields.Select(f => f.CreateInputPort(this)).ToArray();
         Outputs = PortSchema<TOut>.Fields.Select(f => f.CreateOutputPort(this)).ToArray();
+        if (operation is IActionOperation action)
+        {
+            ExecInputs = action.ExecInputs.Select((n, i) => new ExecInput(this, n, i)).ToArray();
+            ExecOutputs = action.ExecOutputs.Select((n, i) => new ExecOutput(this, n, i)).ToArray();
+        }
+        else
+        {
+            ExecInputs = [];
+            ExecOutputs = [];
+        }
     }
 
     public Operation<TIn, TOut> Operation { get; }
     public override IReadOnlyList<InputPort> Inputs { get; }
     public override IReadOnlyList<OutputPort> Outputs { get; }
+    public override IReadOnlyList<ExecInput> ExecInputs { get; }
+    public override IReadOnlyList<ExecOutput> ExecOutputs { get; }
 
     /// <summary>A copy of the current input values.</summary>
     public TIn InputValues => _input;

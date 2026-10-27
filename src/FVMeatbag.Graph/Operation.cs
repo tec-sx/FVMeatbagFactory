@@ -19,10 +19,22 @@ public abstract class Operation<TIn, TOut>
     where TIn : struct
     where TOut : struct
 {
-    /// <summary>Display name used when a node is created without an explicit name.</summary>
-    public virtual string Name => GetType().Name.EndsWith("Operation", StringComparison.Ordinal)
-        ? GetType().Name[..^"Operation".Length]
-        : GetType().Name;
+    /// <summary>Display name used when a node is created without an explicit name; drops an "Operation" or "Action" suffix.</summary>
+    public virtual string Name
+    {
+        get
+        {
+            var name = GetType().Name;
+            foreach (var suffix in (ReadOnlySpan<string>)["Operation", "Action"])
+            {
+                if (name.Length > suffix.Length && name.EndsWith(suffix, StringComparison.Ordinal))
+                {
+                    return name[..^suffix.Length];
+                }
+            }
+            return name;
+        }
+    }
 
     public abstract void Execute(in TIn input, ref TOut output, EvaluationContext context);
 }

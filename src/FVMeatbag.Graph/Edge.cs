@@ -22,3 +22,18 @@ public sealed class Edge
 
     public override string ToString() => $"{Source} -> {Target}";
 }
+
+/// <summary>An execution wire from an exec output to an exec input.</summary>
+public sealed class ExecEdge
+{
+    internal ExecEdge(ExecOutput source, ExecInput target)
+    {
+        Source = source;
+        Target = target;
+    }
+
+    public ExecOutput Source { get; }
+    public ExecInput Target { get; }
+
+    public override string ToString() => $"{Source} => {Target}";
+}

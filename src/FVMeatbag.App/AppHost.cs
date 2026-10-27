@@ -18,6 +18,7 @@ public sealed class AppHost : IDisposable
     {
         RootGraph = Graph.Graph.CreateRoot("App", EvaluationMode.Deferred);
         Scene = new SceneRoot(RootGraph);
+        NewCharacter = new NewCharacterWorkflow(RootGraph.CreateChild("Workflows"), Scene);
         Renderer = new VulkanBackend();
 
         // Edits only queue work; the graph settles once per frame, however many edits arrived.
@@ -27,6 +28,7 @@ public sealed class AppHost : IDisposable
 
     public Graph.Graph RootGraph { get; }
     public SceneRoot Scene { get; }
+    public NewCharacterWorkflow NewCharacter { get; }
     public IRenderBackend Renderer { get; }
 
     /// <summary>Raised after a frame in which at least one node ran.</summary>

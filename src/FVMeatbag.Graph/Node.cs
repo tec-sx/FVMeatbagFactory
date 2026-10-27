@@ -38,6 +38,11 @@ public abstract class Node
 
     public abstract IReadOnlyList<InputPort> Inputs { get; }
     public abstract IReadOnlyList<OutputPort> Outputs { get; }
+    public abstract IReadOnlyList<ExecInput> ExecInputs { get; }
+    public abstract IReadOnlyList<ExecOutput> ExecOutputs { get; }
+
+    /// <summary>Action nodes run only when triggered through an exec input, never on data changes.</summary>
+    public bool IsAction => ExecInputs.Count > 0 || ExecOutputs.Count > 0;
 
     /// <summary>Raised after an evaluation that changed at least one output.</summary>
     public event EventHandler<OutputsChangedEventArgs>? OutputsChanged;
@@ -52,11 +57,24 @@ public abstract class Node
     public OutputPort Output(string name) =>
         Outputs.FirstOrDefault(p => p.Name == name) ?? throw new KeyNotFoundException($"{Name} has no output '{name}'.");
 
-    /// <summary>Queues this node for re-evaluation.</summary>
+    public ExecInput ExecIn(string name = ActionOperation<Unit, Unit>.DefaultInput) =>
+        ExecInputs.FirstOrDefault(p => p.Name == name) ?? throw new KeyNotFoundException($"{Name} has no exec input '{name}'.");
+
+    public ExecOutput ExecOut(string name = ActionOperation<Unit, Unit>.DefaultOutput) =>
+        ExecOutputs.FirstOrDefault(p => p.Name == name) ?? throw new KeyNotFoundException($"{Name} has no exec output '{name}'.");
+
+    /// <summary>Runs this action node from the named exec input (immediately, or on the next evaluate in deferred mode).</summary>
+    public void Trigger(string execInput = ActionOperation<Unit, Unit>.DefaultInput) =>
+        (Graph ?? throw new GraphException($"{Name} is not in a graph.")).Evaluator.Trigger(ExecIn(execInput));
+
+    /// <summary>Queues this node for re-evaluation. Action nodes only record that their inputs changed.</summary>
     public void MarkDirty()
     {
         State = NodeState.Dirty;
-        Graph?.Evaluator.Enqueue(this);
+        if (!IsAction)
+        {
+            Graph?.Evaluator.Enqueue(this);
+        }
     }
 
     /// <summary>Pulls connected inputs, runs the operation and returns the indices of outputs that changed.</summary>
@@ -67,6 +85,9 @@ public abstract class Node
 
     public override string ToString() => Name;
 }
+
+/// <summary>An empty port struct, for operations without inputs or outputs.</summary>
+public readonly struct Unit;
 
 public sealed class OutputsChangedEventArgs(IReadOnlyList<OutputPort> changed) : EventArgs
 {

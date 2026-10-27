@@ -106,18 +106,36 @@ Root graph "App"
   target's world output. Moving the target moves the gizmo through the graph. Move/rotate/scale
   interaction will be nodes in the gizmo's graph. Changing selection removes the gizmo graph.
 
-Your "load mesh → create project → add to scene" flow fits as: a *Load mesh* node outputs mesh
-data; a *Create project* node writes it into the hierarchy; an *Add to scene* node creates the
-`MeshComponent`. **Open (main decision):** these steps are actions with side effects rather than
-pure value transforms. Options:
+### Data wires and execution wires
 
-1. *Data-only graph* (what exists now): side-effect nodes react to a changed value, e.g. a
-   "request id" counter. Simple, but ordering of actions is implicit.
-2. *Data + execution pins* (like UE Blueprints): explicit "then" wires for actions, data wires for
-   values. Clearer for workflows and gizmo state machines, more runtime work.
+The graph has two kinds of wire (decided 2026-10-27):
 
-Recommendation: add execution/event pins as a second edge kind before building the gizmo and the
-load/create/add flow; keep data propagation exactly as it is.
+- **Data wires** carry values and propagate changes as described in section 2.
+- **Exec wires** carry no value; they say "run this action next", like Blueprint's white pins.
+
+An action is an `ActionOperation<TIn, TOut>`. Its node gets exec inputs (default `Execute`) and
+exec outputs (default `Then`) and runs **only** when an exec chain reaches it, never because a
+data input changed. Before each step the data graph is settled, so an action always sees current
+inputs, including results of earlier steps. Its changed data outputs then propagate normally.
+
+- `context.Fire("True")` picks which exec outputs continue (branches, sequences). If an action
+  fires nothing and has exactly one exec output, that output fires automatically.
+- Chains run depth first: everything a step fires finishes before the next queued trigger.
+- A throwing action faults and stops its chain.
+- `node.Trigger()` starts a chain from code or UI; in deferred mode it runs on the next frame,
+  after the data graph has settled.
+- An exec output leads to one input; an input accepts many. Exec loops are allowed (state
+  machines) and runaway loops are stopped by `MaxEvaluationsPerPass`.
+
+`NewCharacterWorkflow` is the first real chain and backs **File → New Project** in the app:
+
+```
+[Load mesh] ──exec──▶ [Create project] ──exec──▶ [Add to scene]
+     Mesh ───data───▶ Mesh       BaseMesh ──data──▶ Asset
+```
+
+Load mesh only records the file name and path for now; the real importer slots in later without
+changing the chain.
 
 Undo/redo should live at the graph-edit level (input changes, connect, add/remove) as commands.
 **Open.**

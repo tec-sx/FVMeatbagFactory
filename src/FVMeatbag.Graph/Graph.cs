@@ -128,6 +128,35 @@ public sealed class Graph
         return edge;
     }
 
+    /// <summary>
+    /// Wires an exec output to an exec input. An existing wire from <paramref name="source"/> is replaced.
+    /// Exec wires may loop; runaway loops are caught by <see cref="GraphEvaluator.MaxEvaluationsPerPass"/>.
+    /// </summary>
+    public ExecEdge Connect(ExecOutput source, ExecInput target)
+    {
+        EnsureAttached();
+        EnsureInTree(source.Node);
+        EnsureInTree(target.Node);
+
+        if (source.Connection is { } existing)
+        {
+            Detach(existing);
+        }
+        var edge = new ExecEdge(source, target);
+        source.Connection = edge;
+        target.AddConnection(edge);
+        return edge;
+    }
+
+    public void Disconnect(ExecEdge edge)
+    {
+        EnsureAttached();
+        if (edge.Source.Connection == edge)
+        {
+            Detach(edge);
+        }
+    }
+
     public void Disconnect(Edge edge)
     {
         if (edge.Target.Connection != edge)
@@ -183,6 +212,26 @@ public sealed class Graph
                 Detach(edge);
             }
         }
+        foreach (var input in node.ExecInputs)
+        {
+            foreach (var edge in input.Connections.ToArray())
+            {
+                Detach(edge);
+            }
+        }
+        foreach (var output in node.ExecOutputs)
+        {
+            if (output.Connection is { } edge)
+            {
+                Detach(edge);
+            }
+        }
+    }
+
+    private static void Detach(ExecEdge edge)
+    {
+        edge.Source.Connection = null;
+        edge.Target.RemoveConnection(edge);
     }
 
     // The target keeps the last value it received; it is re-evaluated in case it depends on being connected.

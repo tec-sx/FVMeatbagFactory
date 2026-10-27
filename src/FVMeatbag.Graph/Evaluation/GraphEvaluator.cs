@@ -25,14 +25,20 @@ public enum EvaluationMode
 /// After a node runs, only the outputs that actually changed dirty their downstream nodes, so a
 /// change stops propagating as soon as a result comes out the same.
 /// </para>
+/// <para>
+/// Action nodes are the exception: they run only when an exec chain reaches them (see
+/// <see cref="Trigger"/>), with the data graph settled before every step.
+/// </para>
 /// <para>Not thread-safe: own it from one thread (the UI or a dedicated graph thread).</para>
 /// </remarks>
 public sealed class GraphEvaluator
 {
     private readonly HashSet<Node> _nodes = [];
     private readonly PriorityQueue<Node, (int Rank, long Sequence)> _queue = new();
+    private readonly Queue<ExecInput> _triggers = new();
     private long _sequence;
     private long _pass;
+    private int _evaluatedThisPass;
     private int _batchDepth;
     private bool _evaluating;
     private bool _ranksStale;
@@ -47,7 +53,7 @@ public sealed class GraphEvaluator
     /// <summary>Safety valve against operations that keep re-dirtying each other through side effects.</summary>
     public int MaxEvaluationsPerPass { get; set; } = 100_000;
 
-    public bool HasPendingWork => _queue.Count > 0;
+    public bool HasPendingWork => _queue.Count > 0 || _triggers.Count > 0;
     public bool IsBatching => _batchDepth > 0;
     public bool IsEvaluating => _evaluating;
 
@@ -64,7 +70,10 @@ public sealed class GraphEvaluator
         return new BatchScope(this);
     }
 
-    /// <summary>Evaluates every dirty node and its affected downstream chain. Returns how many nodes ran.</summary>
+    /// <summary>
+    /// Evaluates every dirty data node and its affected downstream chain, then runs queued action
+    /// chains in trigger order. Returns how many nodes ran.
+    /// </summary>
     public int Evaluate()
     {
         if (_evaluating)
@@ -74,59 +83,124 @@ public sealed class GraphEvaluator
 
         _evaluating = true;
         _pass++;
-        var evaluated = 0;
+        _evaluatedThisPass = 0;
         try
         {
-            while (_queue.Count > 0)
+            SettleData();
+            while (_triggers.TryDequeue(out var trigger))
             {
-                if (_ranksStale)
-                {
-                    RecomputeRanks();
-                }
-
-                var node = _queue.Dequeue();
-                node.IsQueued = false;
-                if (node.Graph is null)
-                {
-                    continue; // removed while queued
-                }
-
-                if (++evaluated > MaxEvaluationsPerPass)
-                {
-                    throw new GraphException(
-                        $"Evaluation pass exceeded {MaxEvaluationsPerPass} node runs; an operation is probably re-dirtying the graph in a loop.");
-                }
-
-                var changed = node.Evaluate(new EvaluationContext(this, node, _pass));
-                if (node.State == NodeState.Faulted)
-                {
-                    NodeFaulted?.Invoke(this, new NodeFaultedEventArgs(node, node.Fault!));
-                    continue;
-                }
-
-                var changedPorts = new OutputPort[changed.Count];
-                for (var i = 0; i < changed.Count; i++)
-                {
-                    var port = node.Outputs[changed[i]];
-                    changedPorts[i] = port;
-                    foreach (var edge in port.Connections)
-                    {
-                        edge.Target.Node.MarkDirty();
-                    }
-                }
-
-                NodeEvaluated?.Invoke(this, new NodeEvaluatedEventArgs(node, changedPorts));
-                if (changedPorts.Length > 0)
-                {
-                    node.RaiseOutputsChanged(changedPorts);
-                }
+                RunActionChain(trigger);
             }
         }
         finally
         {
             _evaluating = false;
         }
-        return evaluated;
+        return _evaluatedThisPass;
+    }
+
+    /// <summary>
+    /// Queues an action chain starting at <paramref name="entry"/>. Chains run after the data graph
+    /// has settled, one after another, each to completion.
+    /// </summary>
+    public void Trigger(ExecInput entry)
+    {
+        if (entry.Node.Graph?.Evaluator != this)
+        {
+            throw new GraphException($"{entry} is not part of this graph tree.");
+        }
+        _triggers.Enqueue(entry);
+        RequestEvaluation();
+    }
+
+    private void SettleData()
+    {
+        while (_queue.Count > 0)
+        {
+            if (_ranksStale)
+            {
+                RecomputeRanks();
+            }
+
+            var node = _queue.Dequeue();
+            node.IsQueued = false;
+            if (node.Graph is not null && !node.IsAction)
+            {
+                Run(node, null);
+            }
+        }
+    }
+
+    // Depth first: everything an action fires completes before the next queued trigger starts.
+    private void RunActionChain(ExecInput entry)
+    {
+        var pending = new Stack<ExecInput>();
+        pending.Push(entry);
+        while (pending.Count > 0)
+        {
+            var pin = pending.Pop();
+            if (pin.Node.Graph is null)
+            {
+                continue; // removed by an earlier step
+            }
+
+            SettleData(); // the action must see up-to-date inputs, including results of earlier steps
+            var context = Run(pin.Node, pin);
+            if (context is null)
+            {
+                continue; // faulted: the chain stops here
+            }
+
+            var fired = context.FiredOutputs;
+            if (fired.Count == 0 && pin.Node.ExecOutputs.Count == 1)
+            {
+                fired = pin.Node.ExecOutputs;
+            }
+            for (var i = fired.Count - 1; i >= 0; i--)
+            {
+                if (fired[i].Connection is { } edge)
+                {
+                    pending.Push(edge.Target);
+                }
+            }
+        }
+        SettleData();
+    }
+
+    /// <summary>Runs one node and propagates changed outputs. Returns null if the node faulted.</summary>
+    private EvaluationContext? Run(Node node, ExecInput? trigger)
+    {
+        if (++_evaluatedThisPass > MaxEvaluationsPerPass)
+        {
+            throw new GraphException(
+                $"Evaluation pass exceeded {MaxEvaluationsPerPass} node runs; the graph is probably re-triggering itself in a loop.");
+        }
+
+        var context = new EvaluationContext(this, node, _pass, trigger);
+        var changed = node.Evaluate(context);
+        if (node.State == NodeState.Faulted)
+        {
+            NodeFaulted?.Invoke(this, new NodeFaultedEventArgs(node, node.Fault!));
+            return null;
+        }
+
+        var changedPorts = new OutputPort[changed.Count];
+        for (var i = 0; i < changed.Count; i++)
+        {
+            var port = node.Outputs[changed[i]];
+            changedPorts[i] = port;
+            foreach (var edge in port.Connections)
+            {
+                edge.Target.Node.MarkDirty();
+            }
+        }
+
+        NodeEvaluated?.Invoke(this, new NodeEvaluatedEventArgs(node, changedPorts));
+        if (changedPorts.Length > 0)
+        {
+            node.RaiseOutputsChanged(changedPorts);
+        }
+        return context;
     }
 
     internal void Register(Node node)
