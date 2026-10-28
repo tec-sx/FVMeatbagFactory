@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 using FVMeatbag.Graph;
 using Silk.NET.Assimp;
 using AssimpNode = Silk.NET.Assimp.Node;
@@ -29,12 +30,34 @@ public static class FbxImporter
         | PostProcessSteps.JoinIdenticalVertices
         | PostProcessSteps.GenerateSmoothNormals;
 
-    private static readonly Lazy<Assimp> Api = new(Assimp.GetApi);
+    private static readonly Lazy<Assimp> Api = new(LoadApi);
 
     public static IReadOnlyList<string> SupportedExtensions { get; } = [".fbx"];
 
     public static bool IsSupported(string path) =>
         SupportedExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Loads the Assimp library that ships with the app. Silk.NET finds it through the runtime's
+    /// RID fallback graph, which Microsoft's .NET builds no longer carry, so the app's own
+    /// runtimes folder is tried first.
+    /// </summary>
+    private static Assimp LoadApi()
+    {
+        var bundled = Path.Combine(AppContext.BaseDirectory, "runtimes", RuntimeId(), "native", LibraryName());
+        return System.IO.File.Exists(bundled) ? new Assimp(Assimp.CreateDefaultContext([bundled])) : Assimp.GetApi();
+    }
+
+    private static string RuntimeId()
+    {
+        var os = OperatingSystem.IsWindows() ? "win" : OperatingSystem.IsMacOS() ? "osx" : "linux";
+        return $"{os}-{RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant()}";
+    }
+
+    private static string LibraryName() =>
+        OperatingSystem.IsWindows() ? (Environment.Is64BitProcess ? "Assimp64.dll" : "Assimp32.dll")
+        : OperatingSystem.IsMacOS() ? "libassimp.5.dylib"
+        : "libassimp.so.5";
 
     public static LoadedMesh Load(string path)
     {
