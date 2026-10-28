@@ -10,10 +10,64 @@
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
         <ResourceInclude Source="/Assets/Icons.axaml" />
+        <ResourceInclude Source="/Themes/DarkTheme.axaml" />
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </Application.Resources>
   <Application.Styles>
-    <FluentTheme />
+    <FluentTheme>
+      <FluentTheme.Palettes>
+        <!-- Visual Studio dark greys in place of Fluent's black surfaces; matches Themes/DarkTheme.axaml. -->
+        <ColorPaletteResources x:Key="Dark"
+                               Accent="#007ACC"
+                               AltHigh="#1F1F1F" AltLow="#1F1F1F" AltMedium="#1F1F1F"
+                               AltMediumHigh="#1F1F1F" AltMediumLow="#1F1F1F"
+                               BaseHigh="#F1F1F1" BaseLow="#3F3F46" BaseMedium="#999999"
+                               BaseMediumHigh="#C8C8C8" BaseMediumLow="#6E6E72"
+                               ChromeAltLow="#C8C8C8"
+                               ChromeBlackHigh="#1F1F1F" ChromeBlackLow="#C8C8C8"
+                               ChromeBlackMedium="#252526" ChromeBlackMediumLow="#2D2D30"
+                               ChromeDisabledHigh="#3F3F46" ChromeDisabledLow="#6E6E72"
+                               ChromeGray="#999999" ChromeHigh="#4A4A50"
+                               ChromeLow="#252526" ChromeMedium="#2D2D30" ChromeMediumLow="#333337"
+                               ChromeWhite="#F1F1F1"
+                               ListLow="#2D2D30" ListMedium="#3E3E40"
+                               RegionColor="#1F1F1F" />
+      </FluentTheme.Palettes>
+    </FluentTheme>
+
+    <!-- Compact sizes, leaving more room for the viewport. -->
+    <Style Selector="Window">
+      <Setter Property="Background" Value="{DynamicResource Theme.Window}" />
+      <Setter Property="Foreground" Value="{DynamicResource Theme.Text}" />
+      <Setter Property="FontSize" Value="{DynamicResource Theme.FontSize}" />
+    </Style>
+    <Style Selector="MenuItem">
+      <Setter Property="FontSize" Value="{DynamicResource Theme.FontSize}" />
+    </Style>
+    <Style Selector="Menu > MenuItem">
+      <Setter Property="Padding" Value="8,4" />
+    </Style>
+    <Style Selector="Button, ToggleButton, ComboBox, CheckBox">
+      <Setter Property="FontSize" Value="{DynamicResource Theme.FontSize}" />
+      <Setter Property="MinHeight" Value="22" />
+    </Style>
+    <Style Selector="Button">
+      <Setter Property="Padding" Value="8,2" />
+    </Style>
+    <Style Selector="ComboBox">
+      <Setter Property="Padding" Value="8,2" />
+    </Style>
+    <Style Selector="TreeViewItem">
+      <Setter Property="MinHeight" Value="22" />
+      <Setter Property="FontSize" Value="{DynamicResource Theme.FontSize}" />
+    </Style>
+    <Style Selector="TreeView">
+      <Setter Property="Background" Value="{DynamicResource Theme.Panel}" />
+    </Style>
+    <Style Selector="GridSplitter">
+      <Setter Property="Background" Value="{DynamicResource Theme.Border}" />
+      <Setter Property="MinWidth" Value="2" />
+    </Style>
   </Application.Styles>
 </Application>

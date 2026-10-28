@@ -40,7 +40,7 @@ public sealed class ViewportControl : Control
 
     /// <summary>A press and release closer than this, in pixels, is a click rather than a drag.</summary>
     private const double ClickSlop = 3;
-    private static readonly IBrush Background = new SolidColorBrush(Color.FromRgb(0x21, 0x21, 0x24));
+    private static readonly IBrush FallbackBackground = new SolidColorBrush(Color.FromRgb(0x26, 0x26, 0x29));
 
     private WriteableBitmap? _bitmap;
     private bool _dirty;
@@ -74,7 +74,10 @@ public sealed class ViewportControl : Control
     {
         ArgumentNullException.ThrowIfNull(context);
         var bounds = new Rect(Bounds.Size);
-        context.FillRectangle(Background, bounds);
+        var background = this.TryFindResource("Theme.Viewport", ActualThemeVariant, out var resource) && resource is IBrush brush
+            ? brush
+            : FallbackBackground;
+        context.FillRectangle(background, bounds);
         if (_error is not null)
         {
             var text = new FormattedText(_error, System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight, Typeface.Default, 13, Brushes.Gray)

@@ -1,0 +1,44 @@
+﻿<!--
+  The app's dark theme, modeled on Visual Studio's: dark greys only, never pure black.
+  Views use these keys with DynamicResource; the Fluent palette in App.axaml uses the same greys.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Palette -->
+  <Color x:Key="Theme.WindowColor">#1F1F1F</Color>
+  <Color x:Key="Theme.PanelColor">#252526</Color>
+  <Color x:Key="Theme.TitleBarColor">#2D2D30</Color>
+  <Color x:Key="Theme.BorderColor">#3F3F46</Color>
+  <Color x:Key="Theme.SeparatorColor">#4A4A50</Color>
+  <Color x:Key="Theme.HoverColor">#3E3E40</Color>
+  <Color x:Key="Theme.AccentColor">#007ACC</Color>
+  <Color x:Key="Theme.TextColor">#F1F1F1</Color>
+  <Color x:Key="Theme.DimTextColor">#999999</Color>
+  <Color x:Key="Theme.ViewportColor">#262629</Color>
+  <Color x:Key="Theme.OverlayColor">#D02D2D30</Color>
+
+  <SolidColorBrush x:Key="Theme.Window" Color="{StaticResource Theme.WindowColor}" />
+  <SolidColorBrush x:Key="Theme.Panel" Color="{StaticResource Theme.PanelColor}" />
+  <SolidColorBrush x:Key="Theme.TitleBar" Color="{StaticResource Theme.TitleBarColor}" />
+  <SolidColorBrush x:Key="Theme.ToolBar" Color="{StaticResource Theme.TitleBarColor}" />
+  <SolidColorBrush x:Key="Theme.StatusBar" Color="{StaticResource Theme.TitleBarColor}" />
+  <SolidColorBrush x:Key="Theme.Border" Color="{StaticResource Theme.BorderColor}" />
+  <SolidColorBrush x:Key="Theme.Separator" Color="{StaticResource Theme.SeparatorColor}" />
+  <SolidColorBrush x:Key="Theme.Hover" Color="{StaticResource Theme.HoverColor}" />
+  <SolidColorBrush x:Key="Theme.Accent" Color="{StaticResource Theme.AccentColor}" />
+  <SolidColorBrush x:Key="Theme.Text" Color="{StaticResource Theme.TextColor}" />
+  <SolidColorBrush x:Key="Theme.DimText" Color="{StaticResource Theme.DimTextColor}" />
+  <SolidColorBrush x:Key="Theme.Viewport" Color="{StaticResource Theme.ViewportColor}" />
+  <SolidColorBrush x:Key="Theme.Overlay" Color="{StaticResource Theme.OverlayColor}" />
+
+  <!-- Sizes -->
+  <x:Double x:Key="Theme.FontSize">12</x:Double>
+  <x:Double x:Key="Theme.SmallFontSize">11</x:Double>
+  <x:Double x:Key="Theme.TitleBarHeight">30</x:Double>
+  <x:Double x:Key="Theme.ToolButtonWidth">24</x:Double>
+  <x:Double x:Key="Theme.ToolButtonHeight">22</x:Double>
+  <x:Double x:Key="Theme.IconSize">14</x:Double>
+
+  <!-- Fluent defaults that would otherwise make controls large. -->
+  <x:Double x:Key="ControlContentThemeFontSize">12</x:Double>
+</ResourceDictionary>
