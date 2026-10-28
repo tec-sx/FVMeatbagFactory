@@ -1,4 +1,6 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using FVMeatbag.Graph;
 
 namespace FVMeatbag.Core.Import;
@@ -70,14 +72,40 @@ public sealed class Skeleton
 }
 
 /// <summary>
-/// Up to four bone influences of one vertex. Weights sum to 1, or are all 0 for a vertex that no
-/// bone moves.
+/// Up to <see cref="MaxInfluences"/> bone influences of one vertex, strongest first. Weights sum to
+/// 1, or are all 0 for a vertex that no bone moves.
 /// </summary>
-public readonly record struct SkinWeights(ushort Bone0, ushort Bone1, ushort Bone2, ushort Bone3, Vector4 Weights)
+/// <remarks>
+/// Eight matches what UE5 imports by default and leaves room for corrective bones on top of the
+/// main skeleton. Unused slots have bone 0 and weight 0.
+/// </remarks>
+public readonly record struct SkinWeights
 {
+    public const int MaxInfluences = 8;
+
+    private readonly BoneSlots _bones;
+    private readonly Vector4 _weights0;
+    private readonly Vector4 _weights1;
+
+    private SkinWeights(BoneSlots bones, Vector4 weights0, Vector4 weights1)
+    {
+        _bones = bones;
+        _weights0 = weights0;
+        _weights1 = weights1;
+    }
+
     public static SkinWeights None => default;
 
-    /// <summary>Keeps the four strongest influences and normalizes them.</summary>
+    /// <summary>The bone in <paramref name="slot"/> (0 to <see cref="MaxInfluences"/> - 1).</summary>
+    public ushort Bone(int slot) => _bones[CheckSlot(slot)];
+
+    /// <summary>The weight in <paramref name="slot"/> (0 to <see cref="MaxInfluences"/> - 1).</summary>
+    public float Weight(int slot) => CheckSlot(slot) < 4 ? _weights0[slot] : _weights1[slot - 4];
+
+    /// <summary>Sum of all weights: 1 for a skinned vertex, 0 for one no bone moves.</summary>
+    public float TotalWeight => Vector4.Dot(_weights0, Vector4.One) + Vector4.Dot(_weights1, Vector4.One);
+
+    /// <summary>Keeps the <see cref="MaxInfluences"/> strongest influences and normalizes them.</summary>
     public static SkinWeights FromInfluences(IEnumerable<(int Bone, float Weight)> influences)
     {
         ArgumentNullException.ThrowIfNull(influences);
@@ -86,35 +114,59 @@ public readonly record struct SkinWeights(ushort Bone0, ushort Bone1, ushort Bon
             .GroupBy(i => i.Bone)
             .Select(g => (Bone: g.Key, Weight: g.Sum(i => i.Weight)))
             .OrderByDescending(i => i.Weight)
-            .Take(4)
+            .ThenBy(i => i.Bone)
+            .Take(MaxInfluences)
             .ToArray();
         var total = top.Sum(i => i.Weight);
         if (total <= 0f)
         {
             return None;
         }
-        ushort B(int i) => i < top.Length ? (ushort)top[i].Bone : (ushort)0;
-        float W(int i) => i < top.Length ? top[i].Weight / total : 0f;
-        return new SkinWeights(B(0), B(1), B(2), B(3), new Vector4(W(0), W(1), W(2), W(3)));
+        var bones = default(BoneSlots);
+        Span<float> weights = stackalloc float[MaxInfluences];
+        for (var i = 0; i < top.Length; i++)
+        {
+            bones[i] = checked((ushort)top[i].Bone);
+            weights[i] = top[i].Weight / total;
+        }
+        return new SkinWeights(bones, new Vector4(weights[..4]), new Vector4(weights[4..]));
     }
 
+    /// <summary>The non-zero influences, strongest first.</summary>
     public IEnumerable<(int Bone, float Weight)> Influences()
     {
-        if (Weights.X > 0f)
+        for (var slot = 0; slot < MaxInfluences; slot++)
         {
-            yield return (Bone0, Weights.X);
+            var weight = Weight(slot);
+            if (weight > 0f)
+            {
+                yield return (Bone(slot), weight);
+            }
         }
-        if (Weights.Y > 0f)
-        {
-            yield return (Bone1, Weights.Y);
-        }
-        if (Weights.Z > 0f)
-        {
-            yield return (Bone2, Weights.Z);
-        }
-        if (Weights.W > 0f)
-        {
-            yield return (Bone3, Weights.W);
-        }
+    }
+
+    public bool Equals(SkinWeights other) =>
+        ((ReadOnlySpan<ushort>)_bones).SequenceEqual(other._bones) && _weights0 == other._weights0 && _weights1 == other._weights1;
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.AddBytes(MemoryMarshal.AsBytes((ReadOnlySpan<ushort>)_bones));
+        hash.Add(_weights0);
+        hash.Add(_weights1);
+        return hash.ToHashCode();
+    }
+
+    private static int CheckSlot(int slot)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(slot);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(slot, MaxInfluences);
+        return slot;
+    }
+
+    [InlineArray(MaxInfluences)]
+    private struct BoneSlots
+    {
+        private ushort _element;
     }
 }

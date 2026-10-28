@@ -32,7 +32,7 @@ public sealed class PoseTests : IDisposable
     {
         var (asset, skeleton) = SceneWithArm();
         var weights = asset.Geometry.Value.Skin.Value.ToArray();
-        var lower = Enumerable.Range(0, weights.Length).Where(i => weights[i].Bone0 == 0).ToArray();
+        var lower = Enumerable.Range(0, weights.Length).Where(i => weights[i].Bone(0) == 0).ToArray();
         var lowerBefore = lower.Select(i => Positions(skeleton)[i]).ToArray();
 
         // The imported arm is bent 90° at the elbow; turning the upper bone back straightens it.

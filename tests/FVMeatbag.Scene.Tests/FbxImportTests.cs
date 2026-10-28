@@ -80,7 +80,7 @@ public sealed class FbxImportTests : IDisposable
 
         Assert.All(fbx.Geometry.Skin.Value.ToArray(), w =>
         {
-            var total = w.Weights.X + w.Weights.Y + w.Weights.Z + w.Weights.W;
+            var total = w.TotalWeight;
             Assert.True(MathF.Abs(total - 1f) < 1e-4f, $"Weights add up to {total}.");
         });
         foreach (var (name, center) in gltfCenters)

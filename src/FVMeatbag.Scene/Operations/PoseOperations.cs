@@ -61,7 +61,7 @@ public struct SkinningOutput
 }
 
 /// <summary>
-/// Linear blend skinning on the CPU: each vertex is moved by up to four bones. Enough for base
+/// Linear blend skinning on the CPU: each vertex is moved by up to <see cref="SkinWeights.MaxInfluences"/> bones. Enough for base
 /// meshes; GPU skinning can replace it without changing the ports.
 /// </summary>
 public sealed class SkinningOperation : Operation<SkinningInput, SkinningOutput>
@@ -94,8 +94,7 @@ public sealed class SkinningOperation : Operation<SkinningInput, SkinningOutput>
         for (var v = 0; v < positions.Length; v++)
         {
             var w = v < weights.Length ? weights[v] : SkinWeights.None;
-            var total = w.Weights.X + w.Weights.Y + w.Weights.Z + w.Weights.W;
-            if (total <= 0f)
+            if (w.TotalWeight <= 0f)
             {
                 positions[v] = sourcePositions[v];
                 if (v < normals.Length)
@@ -104,8 +103,15 @@ public sealed class SkinningOperation : Operation<SkinningInput, SkinningOutput>
                 }
                 continue;
             }
-            var blended = (Bone(skin, w.Bone0) * w.Weights.X) + (Bone(skin, w.Bone1) * w.Weights.Y)
-                + (Bone(skin, w.Bone2) * w.Weights.Z) + (Bone(skin, w.Bone3) * w.Weights.W);
+            var blended = default(Matrix4x4);
+            for (var slot = 0; slot < SkinWeights.MaxInfluences; slot++)
+            {
+                var weight = w.Weight(slot);
+                if (weight > 0f)
+                {
+                    blended += Bone(skin, w.Bone(slot)) * weight;
+                }
+            }
             positions[v] = Vector3.Transform(sourcePositions[v], blended);
             if (v < normals.Length)
             {

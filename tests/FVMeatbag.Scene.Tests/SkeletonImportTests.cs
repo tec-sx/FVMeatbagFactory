@@ -65,7 +65,7 @@ public sealed class SkeletonImportTests : IDisposable
         Assert.True(size.Y > size.Z && size.Y > 1.5f && size.Y < 2.2f, $"Expected a standing adult in meters, got {size}.");
         Assert.All(mesh.Geometry.Skin.Value.ToArray(), w =>
         {
-            var total = w.Weights.X + w.Weights.Y + w.Weights.Z + w.Weights.W;
+            var total = w.TotalWeight;
             Assert.True(MathF.Abs(total - 1f) < 1e-4f || total == 0f);
             Assert.All(w.Influences(), i => Assert.InRange(i.Bone, 0, skeleton.Count - 1));
         });

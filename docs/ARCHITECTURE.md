@@ -185,7 +185,7 @@ FBX with the native Assimp library (Silk.NET.Assimp). Either way it bakes every 
 `MeshGeometry` (positions, normals, indices) in world space. Skinned meshes are deformed into the
 rest pose the file shows (joint world × inverse bind, so armature transforms are honored); all
 their joints become one `Skeleton` (bones ordered parents first, rest transforms, inverse bind =
-inverse rest) and each vertex keeps up to four normalized `SkinWeights`. Because the stored mesh
+inverse rest) and each vertex keeps up to eight normalized `SkinWeights` (what UE5 imports by default). Because the stored mesh
 is already in the rest pose, bind pose = rest pose, which keeps later posing and weight editing
 simple. A rigged mesh gets a `SkeletonComponent` child in the scene. Its `BoneDisplayOperation`
 node turns the bones into Maya-style overlay lines that follow the mesh's transform: a

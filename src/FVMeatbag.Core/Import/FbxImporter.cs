@@ -27,7 +27,6 @@ public static class FbxImporter
     private const PostProcessSteps Steps =
         PostProcessSteps.Triangulate
         | PostProcessSteps.JoinIdenticalVertices
-        | PostProcessSteps.LimitBoneWeights
         | PostProcessSteps.GenerateSmoothNormals;
 
     private static readonly Lazy<Assimp> Api = new(Assimp.GetApi);
