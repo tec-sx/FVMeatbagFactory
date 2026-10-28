@@ -1,4 +1,5 @@
 using FVMeatbag.Core.Import;
+using FVMeatbag.Core.Muscles;
 using FVMeatbag.Core.Rig;
 using FVMeatbag.Graph;
 
@@ -98,8 +99,11 @@ public sealed class SkeletalMeshAsset(string name, string? sourcePath = null) : 
     /// <summary>Roles and solve modes of the skeleton's corrective bones, saved with the project.</summary>
     public CorrectiveSetup Correctives { get; } = new();
 
+    /// <summary>The muscles placed on the skeleton, saved with the project.</summary>
+    public MuscleSet Muscles { get; } = new();
+
     /// <summary>
-    /// Renames a bone of the skeleton and moves its corrective binding along. Returns false if
+    /// Renames a bone of the skeleton and moves its corrective binding and muscle attachments along. Returns false if
     /// another bone already has that name (ignoring case) or the mesh has no skeleton.
     /// </summary>
     public bool RenameBone(int bone, string name)
@@ -114,6 +118,7 @@ public sealed class SkeletalMeshAsset(string name, string? sourcePath = null) : 
             return false;
         }
         Correctives.RenameBone(old, skeleton.Bones[bone].Name);
+        Muscles.RenameBone(old, skeleton.Bones[bone].Name);
         MarkModified();
         return true;
     }

@@ -64,6 +64,36 @@ public sealed class OffscreenRenderTests : IDisposable
     }
 
     [Fact]
+    public void Overlays_show_through_the_mesh_when_on_top_and_hide_behind_it_otherwise()
+    {
+        // A small red sphere inside the big one, as a muscle sits under the skin.
+        var skin = new MeshDraw(Sphere(Guid.NewGuid()), Matrix4x4.Identity);
+        var muscle = new OverlayDraw(Sphere(Guid.NewGuid(), radius: 0.5f), Matrix4x4.Identity, new Vector4(1, 0, 0, 0.6f));
+        var plain = Render([skin]);
+
+        var xray = Render([skin], overlays: [muscle]);
+        var hidden = Render([skin], overlays: [muscle], overlaysOnTop: false);
+        Dump(xray, "overlay_xray");
+
+        var center = Pixel(xray, 128, 128);
+        Assert.True(((center >> 16) & 0xFF) > (center & 0xFF) + 60, "The muscle tints the middle red.");
+        Assert.NotEqual(Background, center);
+        Assert.Equal(Pixel(plain, 128, 40), Pixel(xray, 128, 40)); // the skin outside the muscle is untouched
+        Assert.Equal(Pixel(plain, 128, 128), Pixel(hidden, 128, 128));
+    }
+
+    [Fact]
+    public void Overlays_blend_with_what_is_behind_them()
+    {
+        var opaque = Render([], overlays: [new OverlayDraw(Sphere(Guid.NewGuid()), Matrix4x4.Identity, new Vector4(1, 0, 0, 1))]);
+        var faint = Render([], overlays: [new OverlayDraw(Sphere(Guid.NewGuid()), Matrix4x4.Identity, new Vector4(1, 0, 0, 0.3f))]);
+
+        var red = static (uint p) => (int)((p >> 16) & 0xFF);
+        Assert.True(red(Pixel(faint, 128, 128)) > red(Background), "A faint overlay still shows.");
+        Assert.True(red(Pixel(faint, 128, 128)) < red(Pixel(opaque, 128, 128)) - 40, "Lower opacity lets the background through.");
+    }
+
+    [Fact]
     public void Wireframe_draws_only_the_edges()
     {
         Assert.SkipUnless(_backend.SupportsWireframe, "The device cannot draw polygons as lines.");
@@ -139,8 +169,10 @@ public sealed class OffscreenRenderTests : IDisposable
         uint height = Size,
         Vector3? toLight = null,
         IReadOnlyList<LineSegment>? lines = null,
-        MeshDisplayMode mode = MeshDisplayMode.Solid) =>
-        Render(_backend, draws, width, height, toLight ?? Vector3.Normalize(new Vector3(1, 1, 1)), lines, mode);
+        MeshDisplayMode mode = MeshDisplayMode.Solid,
+        IReadOnlyList<OverlayDraw>? overlays = null,
+        bool overlaysOnTop = true) =>
+        Render(_backend, draws, width, height, toLight ?? Vector3.Normalize(new Vector3(1, 1, 1)), lines, mode, overlays, overlaysOnTop);
 
     private static byte[] Render(
         VulkanBackend backend,
@@ -149,7 +181,9 @@ public sealed class OffscreenRenderTests : IDisposable
         uint height,
         Vector3 toLight,
         IReadOnlyList<LineSegment>? lines = null,
-        MeshDisplayMode mode = MeshDisplayMode.Solid)
+        MeshDisplayMode mode = MeshDisplayMode.Solid,
+        IReadOnlyList<OverlayDraw>? overlays = null,
+        bool overlaysOnTop = true)
     {
         var frame = new FrameContext(
             width,
@@ -159,8 +193,9 @@ public sealed class OffscreenRenderTests : IDisposable
             toLight,
             new Vector3(3f),
             0,
-            mode);
-        backend.RenderFrame(frame, draws, lines ?? []);
+            mode,
+            overlaysOnTop);
+        backend.RenderFrame(frame, draws, overlays ?? [], lines ?? []);
         var pixels = new byte[width * height * 4];
         var handle = GCHandle.Alloc(pixels, GCHandleType.Pinned);
         try

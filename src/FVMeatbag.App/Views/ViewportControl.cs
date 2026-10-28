@@ -11,6 +11,8 @@ using FVMeatbag.Scene;
 using FVMeatbag.Scene.Components;
 using FVMeatbag.Scene.Tools;
 using LineSegment = FVMeatbag.Rendering.LineSegment;
+using Vector3 = System.Numerics.Vector3;
+using Vector4 = System.Numerics.Vector4;
 
 namespace FVMeatbag.App.Views;
 
@@ -348,7 +350,11 @@ public sealed class ViewportControl : Control
             {
                 renderer.Initialize();
             }
-            renderer.RenderFrame(BuildFrame(host.Scene, (uint)width, (uint)height), BuildDraws(host.Scene), BuildLines(host.Scene, ToolCamera(host.Scene)));
+            renderer.RenderFrame(
+                BuildFrame(host.Scene, (uint)width, (uint)height),
+                BuildDraws(host.Scene),
+                BuildOverlays(host.Scene),
+                BuildLines(host.Scene, ToolCamera(host.Scene)));
 
             if (_bitmap is null || _bitmap.PixelSize.Width != width || _bitmap.PixelSize.Height != height)
             {
@@ -371,7 +377,7 @@ public sealed class ViewportControl : Control
     {
         var camera = scene.Camera.CameraNode!.OutputValues;
         var light = scene.Light.LightNode!.OutputValues;
-        return new FrameContext(width, height, camera.View, camera.Projection, light.DirectionToLight, light.Radiance, 0, DisplayMode);
+        return new FrameContext(width, height, camera.View, camera.Projection, light.DirectionToLight, light.Radiance, 0, DisplayMode, scene.MusclesThroughSkin);
     }
 
     private static List<LineSegment> BuildLines(SceneRoot scene, ViewportCamera? camera)
@@ -397,6 +403,34 @@ public sealed class ViewportControl : Control
             }
         }
         return lines;
+    }
+
+    /// <summary>Display colors of the muscle preview; the alpha comes from the scene's muscle opacity.</summary>
+    private static readonly Vector3 MuscleColor = new(0.80f, 0.24f, 0.22f);
+
+    private static readonly Vector3 SelectedMuscleColor = new(1.00f, 0.66f, 0.22f);
+
+    private static List<OverlayDraw> BuildOverlays(SceneRoot scene)
+    {
+        var overlays = new List<OverlayDraw>();
+        var opacity = scene.MuscleOpacity;
+        foreach (var muscles in scene.MuscleComponents)
+        {
+            if (muscles.ShapeNode is not { } node)
+            {
+                continue;
+            }
+            var shapes = node.OutputValues;
+            foreach (var muscle in shapes.Meshes.Span)
+            {
+                var color = muscle.Selected
+                    ? new Vector4(SelectedMuscleColor, Math.Max(opacity, 0.85f))
+                    : new Vector4(MuscleColor, opacity);
+                var mesh = new RenderMesh(muscle.Id, shapes.Version, muscle.Positions, muscle.Normals, muscle.Indices);
+                overlays.Add(new OverlayDraw(mesh, muscles.WorldMatrix, color));
+            }
+        }
+        return overlays;
     }
 
     private static List<MeshDraw> BuildDraws(SceneRoot scene)

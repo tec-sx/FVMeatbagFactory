@@ -11,6 +11,7 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Rig\CorrectiveRoles.json" LogicalName="FVMeatbag.Core.Rig.CorrectiveRoles.json" />
+    <EmbeddedResource Include="Muscles\MuscleTemplate.json" LogicalName="FVMeatbag.Core.Muscles.MuscleTemplate.json" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="SharpGLTF.Core" />

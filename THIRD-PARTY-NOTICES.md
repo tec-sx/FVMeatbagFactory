@@ -17,6 +17,7 @@ released under the Pictogrammers Free License; the icons themselves are licensed
 | `hexagon-slice-6` | Solid + wireframe | SarinManS |
 | `circle-opacity` | Shaded | Michael Irigoyen |
 | `bone` | Show bones | Austin Andrews |
+| `arm-flex` | Show muscles | Pictogrammers |
 | `fit-to-screen-outline` | Frame all | Google |
 | `cursor-default-outline` | Select tool | Austin Andrews |
 | `arrow-all` | Move tool | Austin Andrews |

@@ -18,6 +18,8 @@ namespace FVMeatbag.Scene;
 public sealed class SceneRoot
 {
     private bool _showBones = true;
+    private bool _showMuscles = true;
+    private float _muscleOpacity = 0.6f;
 
     public SceneRoot(Graph.Graph parentGraph, string name = "Scene")
     {
@@ -46,6 +48,8 @@ public sealed class SceneRoot
 
     public IEnumerable<SkeletonComponent> Skeletons => Root.DescendantsAndSelf().OfType<SkeletonComponent>();
 
+    public IEnumerable<MuscleComponent> MuscleComponents => Root.DescendantsAndSelf().OfType<MuscleComponent>();
+
     /// <summary>Shows or hides the bones of every skeleton, including ones added later.</summary>
     public bool ShowBones
     {
@@ -59,6 +63,30 @@ public sealed class SceneRoot
             }
         }
     }
+
+    /// <summary>Shows or hides the muscle preview of every mesh, including ones added later.</summary>
+    public bool ShowMuscles
+    {
+        get => _showMuscles;
+        set
+        {
+            _showMuscles = value;
+            foreach (var muscles in MuscleComponents)
+            {
+                muscles.Visible = value;
+            }
+        }
+    }
+
+    /// <summary>Opacity of the muscle preview, 0.05 to 1.</summary>
+    public float MuscleOpacity
+    {
+        get => _muscleOpacity;
+        set => _muscleOpacity = Math.Clamp(value, 0.05f, 1f);
+    }
+
+    /// <summary>True draws the muscles over the skin (X-ray); false hides them where the skin is in front.</summary>
+    public bool MusclesThroughSkin { get; set; } = true;
 
     /// <summary>Clears the bone selection of every skeleton.</summary>
     public void ClearBoneSelection()
@@ -101,7 +129,8 @@ public sealed class SceneRoot
 
     /// <summary>
     /// Adds a component that displays <paramref name="asset"/>, moved so its bounds are centered on
-    /// the origin. Rigged meshes get a <see cref="SkeletonComponent"/> child that shows the bones.
+    /// the origin. Rigged meshes get a <see cref="SkeletonComponent"/> child that shows the bones,
+    /// with a <see cref="MuscleComponent"/> below it for the muscle preview.
     /// </summary>
     public MeshComponent AddMesh(SkeletalMeshAsset asset)
     {
@@ -113,7 +142,9 @@ public sealed class SceneRoot
         };
         if (asset.Pose.TryGetValue(out var pose))
         {
-            mesh.AddChild(new SkeletonComponent(pose, asset.Geometry) { Visible = ShowBones });
+            var skeleton = new SkeletonComponent(pose, asset.Geometry) { Visible = ShowBones };
+            skeleton.AddChild(new MuscleComponent(asset.Muscles) { Visible = ShowMuscles });
+            mesh.AddChild(skeleton);
         }
         return Root.AddChild(mesh);
     }

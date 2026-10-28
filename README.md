@@ -48,6 +48,15 @@ camera and one light; select them in the outliner to adjust them.
   evenly. The mesh follows the bones (linear blend skinning). Details shows the bone's
   translate, rotate (relative to rest, like Maya's joint orient) and scale, with **Reset bone**
   and **Reset pose**. Poses are saved with the project.
+- **Muscles.** Select **Muscles** under a skeleton in the outliner and press **Add muscles from
+  the body template** to place the body's main muscles on a UE5 Manny skeleton. They are a
+  see-through preview (opacity and X-ray in Details, the arm button in the top bar shows or
+  hides them) that follows the pose: muscles shorten and bulge as joints bend. Pick a muscle in
+  the list to highlight it and change its radius, flatness, fullness, bulge, tendons and
+  flexor/extensor action, mirror it to the other side, or reset it. Each muscle drives one or
+  more corrective roles with a weight, and many muscles may drive one role; Details lists the
+  tagged corrective bones it moves. Only the corrective bones go to Unreal. Muscles are saved
+  with the project.
 - Viewport: click to select a bone, drag empty space to orbit, right drag or Shift+drag to pan,
   wheel to zoom, F to frame.
 

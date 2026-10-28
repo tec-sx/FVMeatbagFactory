@@ -8,6 +8,7 @@ namespace FVMeatbag.Rendering;
 /// <param name="DirectionToLight">Unit vector from the scene towards the directional light.</param>
 /// <param name="LightRadiance">Light color × intensity.</param>
 /// <param name="DisplayMode">How meshes are drawn.</param>
+/// <param name="OverlaysOnTop">True draws overlays over the meshes even where a mesh is in front (X-ray).</param>
 public readonly record struct FrameContext(
     uint Width,
     uint Height,
@@ -16,7 +17,8 @@ public readonly record struct FrameContext(
     Vector3 DirectionToLight,
     Vector3 LightRadiance,
     double TimeSeconds,
-    MeshDisplayMode DisplayMode = MeshDisplayMode.Solid);
+    MeshDisplayMode DisplayMode = MeshDisplayMode.Solid,
+    bool OverlaysOnTop = true);
 
 /// <summary>How the viewport draws meshes.</summary>
 public enum MeshDisplayMode
@@ -51,10 +53,10 @@ public interface IRenderBackend : IDisposable
     void Resize(uint width, uint height);
 
     /// <summary>
-    /// Draws <paramref name="draws"/>, then <paramref name="lines"/> on top of them, into the
-    /// offscreen target and waits until the frame is finished.
+    /// Draws <paramref name="draws"/>, then the see-through <paramref name="overlays"/>, then
+    /// <paramref name="lines"/> on top of them, into the offscreen target and waits until the frame is finished.
     /// </summary>
-    void RenderFrame(in FrameContext frame, IReadOnlyList<MeshDraw> draws, IReadOnlyList<LineSegment> lines);
+    void RenderFrame(in FrameContext frame, IReadOnlyList<MeshDraw> draws, IReadOnlyList<OverlayDraw> overlays, IReadOnlyList<LineSegment> lines);
 
     /// <summary>
     /// Copies the last rendered frame as 8-bit BGRA rows (top row first) into

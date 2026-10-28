@@ -11,4 +11,6 @@ glslangValidator -V line.vert -o line.vert.spv
 glslangValidator -V line.frag -o line.frag.spv
 glslangValidator -V wire.vert -o wire.vert.spv
 glslangValidator -V wire.frag -o wire.frag.spv
+glslangValidator -V tint.vert -o tint.vert.spv
+glslangValidator -V tint.frag -o tint.frag.spv
 ```

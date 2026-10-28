@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FVMeatbag.Core.Import;
+using FVMeatbag.Core.Muscles;
 using FVMeatbag.Core.Rig;
 using FVMeatbag.Graph;
 
@@ -81,6 +82,7 @@ public static class ProjectFile
                 mesh.ApplyPose(pose, problems);
             }
             mesh.ApplyCorrectives(asset.Correctives);
+            mesh.ApplyMuscles(asset.Muscles, problems);
         }
         return project;
     }
@@ -159,6 +161,8 @@ public static class ProjectFile
         /// <summary>Corrective bones with a role or a non-default mode.</summary>
         public List<CorrectiveDocument>? Correctives { get; set; }
 
+        public List<MuscleDocument>? Muscles { get; set; }
+
         public static MeshDocument From(SkeletalMeshAsset asset)
         {
             var posed = asset.Pose.Match(
@@ -181,6 +185,7 @@ public static class ProjectFile
                 Renames = renames.Count > 0 ? renames : null,
                 Pose = posed.Count > 0 ? posed : null,
                 Correctives = correctives.Count > 0 ? correctives : null,
+                Muscles = asset.Muscles.Count > 0 ? [.. asset.Muscles.Muscles.Select(MuscleDocument.From)] : null,
             };
         }
 
@@ -211,6 +216,21 @@ public static class ProjectFile
             }
         }
 
+        public void ApplyMuscles(MuscleSet muscles, ICollection<string>? problems)
+        {
+            foreach (var muscle in Muscles ?? [])
+            {
+                if (muscle.ToMuscle().TryGetValue(out var loaded))
+                {
+                    muscles.Set(loaded);
+                }
+                else
+                {
+                    problems?.Add($"{Name}: a muscle has no name or bones ({muscle.Name}).");
+                }
+            }
+        }
+
         public void ApplyPose(SkeletonPose pose, ICollection<string>? problems)
         {
             foreach (var bone in Pose ?? [])
@@ -225,6 +245,96 @@ public static class ProjectFile
                 }
             }
         }
+    }
+
+    private sealed class MuscleDocument
+    {
+        public string? Name { get; set; }
+        public string? Template { get; set; }
+        public string? Side { get; set; }
+        public AttachmentDocument? Origin { get; set; }
+        public AttachmentDocument? Insertion { get; set; }
+        public float[]? Facing { get; set; }
+        public string? Shape { get; set; }
+        public string? Action { get; set; }
+        public float Radius { get; set; }
+        public float Flatness { get; set; }
+        public float Thickness { get; set; }
+        public float Volume { get; set; }
+        public float[]? Tendons { get; set; }
+        public List<DriveDocument>? Drives { get; set; }
+
+        public static MuscleDocument From(Muscle muscle) => new()
+        {
+            Name = muscle.Name,
+            Template = muscle.Template.Match(t => t, () => (string?)null),
+            Side = muscle.Side.ToString().ToLowerInvariant(),
+            Origin = AttachmentDocument.From(muscle.Origin),
+            Insertion = AttachmentDocument.From(muscle.Insertion),
+            Facing = [muscle.Facing.X, muscle.Facing.Y, muscle.Facing.Z],
+            Shape = muscle.Shape.ToString().ToLowerInvariant(),
+            Action = muscle.Action.ToString().ToLowerInvariant(),
+            Radius = muscle.Radius,
+            Flatness = muscle.Flatness,
+            Thickness = muscle.Thickness,
+            Volume = muscle.Volume,
+            Tendons = [muscle.Tendons.X, muscle.Tendons.Y],
+            Drives = muscle.Drives.Count > 0 ? [.. muscle.Drives.Select(DriveDocument.From)] : null,
+        };
+
+        public Maybe<Muscle> ToMuscle()
+        {
+            if (string.IsNullOrWhiteSpace(Name) || Origin?.ToAttachment() is not { } origin || Insertion?.ToAttachment() is not { } insertion)
+            {
+                return Maybe<Muscle>.None;
+            }
+            return new Muscle(
+                Name,
+                string.IsNullOrWhiteSpace(Template) ? Maybe<string>.None : Template,
+                Enum.TryParse<BoneSide>(Side, ignoreCase: true, out var side) ? side : BoneSide.Center,
+                origin,
+                insertion,
+                Facing is [var fx, var fy, var fz] ? new Vector3(fx, fy, fz) : Vector3.UnitY,
+                Enum.TryParse<MuscleShape>(Shape, ignoreCase: true, out var shape) ? shape : MuscleShape.Fusiform,
+                Enum.TryParse<MuscleAction>(Action, ignoreCase: true, out var action) ? action : MuscleAction.Flexor,
+                Radius,
+                Flatness,
+                Thickness,
+                Volume,
+                Tendons is [var a, var b] ? new Vector2(a, b) : new Vector2(0.1f, 0.1f),
+                [.. (Drives ?? []).Where(d => !string.IsNullOrWhiteSpace(d.Role)).Select(d => d.ToDrive())]);
+        }
+    }
+
+    private sealed class AttachmentDocument
+    {
+        public string? Bone { get; set; }
+        public float[]? Local { get; set; }
+
+        public static AttachmentDocument From(MuscleAttachment attachment) => new()
+        {
+            Bone = attachment.Bone,
+            Local = [attachment.Local.X, attachment.Local.Y, attachment.Local.Z],
+        };
+
+        public MuscleAttachment? ToAttachment() =>
+            string.IsNullOrWhiteSpace(Bone) ? null : new MuscleAttachment(Bone, Local is [var x, var y, var z] ? new Vector3(x, y, z) : Vector3.Zero);
+    }
+
+    private sealed class DriveDocument
+    {
+        public string? Role { get; set; }
+        public string? Part { get; set; }
+        public float Weight { get; set; }
+
+        public static DriveDocument From(MuscleDrive drive) => new()
+        {
+            Role = drive.Role,
+            Part = drive.Part.Match(p => p, () => (string?)null),
+            Weight = drive.Weight,
+        };
+
+        public MuscleDrive ToDrive() => new(Role!, string.IsNullOrWhiteSpace(Part) ? Maybe<string>.None : Part, Weight);
     }
 
     private sealed class BoneRenameDocument

@@ -129,6 +129,9 @@
             <ToggleButton Classes="tool" IsChecked="{Binding ShowBones}" ToolTip.Tip="Show bones">
               <PathIcon Data="{StaticResource Icon.Bones}" />
             </ToggleButton>
+            <ToggleButton Classes="tool" IsChecked="{Binding ShowMuscles}" ToolTip.Tip="Show muscles. Select Muscles in the outliner for opacity and X-ray.">
+              <PathIcon Data="{StaticResource Icon.Muscles}" />
+            </ToggleButton>
             <Rectangle Width="1" Margin="4,3" Fill="{DynamicResource Theme.Separator}" />
             <Button Classes="tool" Command="{Binding FrameAllCommand}" ToolTip.Tip="Frame all (F)">
               <PathIcon Data="{StaticResource Icon.FrameAll}" />
@@ -279,6 +282,97 @@
                 </StackPanel>
                 </ScrollViewer>
               </Grid>
+            </DataTemplate>
+            <DataTemplate DataType="vm:MuscleDetailsViewModel">
+              <ScrollViewer Margin="0,0,0,8">
+                <StackPanel Spacing="4" Margin="0,0,10,0">
+                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding Problems}" IsVisible="{Binding HasProblems}" TextWrapping="Wrap"
+                             Foreground="{DynamicResource Theme.DimText}" FontSize="{DynamicResource Theme.SmallFontSize}" />
+                  <TextBlock Text="A preview to shape the correctives by; only the corrective bones go to Unreal."
+                             TextWrapping="Wrap" Foreground="{DynamicResource Theme.DimText}" FontSize="{DynamicResource Theme.SmallFontSize}" />
+                  <Button Content="Add muscles from the body template" Command="{Binding AddTemplateCommand}" IsEnabled="{Binding CanUseTemplate}"
+                          ToolTip.Tip="Places the body's main muscles by the UE5 Manny bones. Muscles already there are kept." Padding="8,2" />
+                  <CheckBox Content="Show muscles" IsChecked="{Binding ShowMuscles}" />
+                  <CheckBox Content="See through the skin (X-ray)" IsChecked="{Binding ThroughSkin}" />
+                  <Grid ColumnDefinitions="96,*">
+                    <TextBlock Text="{Binding Opacity, StringFormat='Opacity {0:P0}'}" VerticalAlignment="Center" />
+                    <Slider Grid.Column="1" Minimum="0.05" Maximum="1" Value="{Binding Opacity}" />
+                  </Grid>
+                  <DockPanel Margin="0,4,0,0">
+                    <Button DockPanel.Dock="Right" Content="Deselect" Command="{Binding ClearSelectionCommand}" Padding="8,2" />
+                    <TextBlock Text="Muscles" FontWeight="SemiBold" VerticalAlignment="Center" />
+                  </DockPanel>
+                  <Border BorderBrush="{DynamicResource Theme.Border}" BorderThickness="1" CornerRadius="3" Height="200">
+                    <ListBox ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}" Background="Transparent">
+                      <ListBox.ItemTemplate>
+                        <DataTemplate DataType="vm:MuscleItemViewModel">
+                          <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding Name}" />
+                            <TextBlock Text="{Binding Badge}" Foreground="{DynamicResource Theme.DimText}" FontSize="{DynamicResource Theme.SmallFontSize}"
+                                       VerticalAlignment="Center" />
+                          </StackPanel>
+                        </DataTemplate>
+                      </ListBox.ItemTemplate>
+                      <ListBox.Styles>
+                        <Style Selector="ListBoxItem">
+                          <Setter Property="Padding" Value="6,2" />
+                          <Setter Property="MinHeight" Value="22" />
+                        </Style>
+                      </ListBox.Styles>
+                    </ListBox>
+                  </Border>
+                  <TextBlock Text="{Binding SelectedInfo}" TextWrapping="Wrap" Opacity="0.85" Margin="0,4,0,0" />
+                  <StackPanel Spacing="2" IsVisible="{Binding HasSelection}">
+                    <ComboBox ItemsSource="{Binding ActionChoices}" SelectedIndex="{Binding ActionIndex}" HorizontalAlignment="Stretch" />
+                    <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+                      <TextBlock Grid.Row="0" Text="{Binding Radius, StringFormat='Radius {0:0.###}'}" VerticalAlignment="Center"
+                                 ToolTip.Tip="Belly half-width, in body units (pelvis to head)." />
+                      <Slider Grid.Row="0" Grid.Column="1" Minimum="0.005" Maximum="0.15" Value="{Binding Radius}" />
+                      <TextBlock Grid.Row="1" Text="{Binding Flatness, StringFormat='Flatness {0:0.##}'}" VerticalAlignment="Center"
+                                 ToolTip.Tip="Depth over width: 1 is round, lower is flatter." />
+                      <Slider Grid.Row="1" Grid.Column="1" Minimum="0.1" Maximum="1" Value="{Binding Flatness}" />
+                      <TextBlock Grid.Row="2" Text="{Binding Thickness, StringFormat='Fullness {0:0.##}'}" VerticalAlignment="Center"
+                                 ToolTip.Tip="Positive gives a fuller belly, negative a slimmer one." />
+                      <Slider Grid.Row="2" Grid.Column="1" Minimum="-1" Maximum="1" Value="{Binding Thickness}" />
+                      <TextBlock Grid.Row="3" Text="{Binding Volume, StringFormat='Bulge {0:0.##}'}" VerticalAlignment="Center"
+                                 ToolTip.Tip="1 keeps the volume when the muscle shortens; 0 never bulges." />
+                      <Slider Grid.Row="3" Grid.Column="1" Minimum="0" Maximum="2" Value="{Binding Volume}" />
+                      <TextBlock Grid.Row="4" Text="{Binding OriginTendon, StringFormat='Tendon in {0:P0}'}" VerticalAlignment="Center"
+                                 ToolTip.Tip="Length of the tendon at the origin, as a share of the muscle." />
+                      <Slider Grid.Row="4" Grid.Column="1" Minimum="0" Maximum="0.5" Value="{Binding OriginTendon}" />
+                      <TextBlock Grid.Row="5" Text="{Binding InsertionTendon, StringFormat='Tendon out {0:P0}'}" VerticalAlignment="Center"
+                                 ToolTip.Tip="Length of the tendon at the insertion, as a share of the muscle." />
+                      <Slider Grid.Row="5" Grid.Column="1" Minimum="0" Maximum="0.5" Value="{Binding InsertionTendon}" />
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Button Content="Mirror" Command="{Binding MirrorCommand}" Padding="8,2" ToolTip.Tip="Copy to the other side, replacing its twin." />
+                      <Button Content="Reset" Command="{Binding ResetToTemplateCommand}" Padding="8,2" ToolTip.Tip="Back to the template's placement, shape and drives." />
+                      <Button Content="Remove" Command="{Binding RemoveCommand}" Padding="8,2" />
+                    </StackPanel>
+                    <DockPanel Margin="0,8,0,0">
+                      <Button DockPanel.Dock="Right" Content="Add" Command="{Binding AddDriveCommand}" Padding="8,2" />
+                      <TextBlock Text="Drives correctives" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <ItemsControl ItemsSource="{Binding Drives}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:MuscleDriveViewModel">
+                          <Grid ColumnDefinitions="*,56,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="4" Margin="0,2">
+                            <ComboBox Grid.Column="0" ItemsSource="{Binding RoleChoices}" SelectedIndex="{Binding RoleIndex}" HorizontalAlignment="Stretch" />
+                            <TextBox Grid.Column="1" Text="{Binding Part}" PlaceholderText="part" ToolTip.Tip="Optional part (hi, lo, inner); empty drives every part." />
+                            <Button Grid.Column="2" Content="✕" Command="{Binding RemoveCommand}" Padding="6,2" ToolTip.Tip="Remove" />
+                            <Slider Grid.Row="1" Grid.ColumnSpan="2" Minimum="0" Maximum="1" Value="{Binding Weight}" ToolTip.Tip="Weight" />
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding Weight, StringFormat='{}{0:0.##}'}" VerticalAlignment="Center" />
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="{Binding DrivenCorrectives}" TextWrapping="Wrap" Opacity="0.85" />
+                  </StackPanel>
+                  <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Opacity="0.85" />
+                </StackPanel>
+              </ScrollViewer>
             </DataTemplate>
           </ContentControl.DataTemplates>
         </ContentControl>

@@ -263,6 +263,30 @@ on bone names, so skeletons follow a contract (`FVMeatbag.Core.Rig`):
   with 26 sample correctives that carry no weights yet. User meshes stay out of the repository
   (`assets/Private/` is git-ignored and CI fails on mesh files outside samples and fixtures).
 
+### Muscles
+
+Muscles are a preview that the correctives are shaped by; only the corrective bones go to
+Unreal. The ideas come from Blender muscle rigs (stretch with volume preservation, flexor and
+extensor, tendons), reimplemented here, not ported (`FVMeatbag.Core.Muscles`).
+
+- A `Muscle` has an origin and an insertion, each a point in a bone's rest space, so it follows
+  that bone in any pose. Its shape is a spindle: radius, flatness (depth over width, facing a
+  stored direction), fullness and tendon lengths. Shortening to `stretch` times the rest length
+  widens the belly by `stretch^(-Volume/2)` (clamped), so Volume 1 keeps the volume; extensors
+  use the inverse.
+- Muscles and correctives are many to many: each muscle lists `MuscleDrive`s (corrective role,
+  optional part, weight), and `DriveWeight(tag)` says how much it moves a corrective with that
+  tag on its side. Many muscles may drive one role.
+- `BodyFrame` reads the character's up, left and forward from the Manny pelvis, head and upper
+  arms, with pelvis-to-head as the unit. `MuscleTemplate` (embedded `MuscleTemplate.json`, 18
+  muscles, 35 with both sides) places muscles in those terms by Manny bone names, so it fits any
+  size, up axis and facing. It also mirrors muscles across the body's center plane.
+- The `MuscleSet` lives on the mesh asset and is saved in `project.json` (with bone renames).
+- In the scene a `MuscleComponent` sits under each skeleton with three nodes: rig (bones looked
+  up, rest lengths; runs when muscles or bone names change), frames (placed on the pose's bone
+  matrices, stretch and bulge; runs on every pose change) and shapes (one preview mesh each).
+  Later stages, pushing the skin and fitting correctives, read the frames.
+
 ## 4. Rendering
 
 ### Silk.NET vs Vortice
@@ -315,7 +339,10 @@ always closed. The display modes (wireframe, solid, solid + wireframe, shaded) a
 `FrameContext` field: wireframe redraws the meshes with polygon mode Line, depth tested
 against the solid pass but not written (so wireframe-only shows hidden edges) with a small depth
 bias; it needs the `fillModeNonSolid` device feature and falls back to solid without it. Shaded
-draws like solid until materials exist. Overlay lines (bones) are drawn last without depth testing. Shaders live in `src/FVMeatbag.Rendering.Vulkan/Shaders` as GLSL with committed
+draws like solid until materials exist. Overlay meshes (the muscle preview) come after the meshes
+with their own tint shader: a depth-only pass, then a color pass blended by the overlay's alpha
+with depth test LessOrEqual, so each overlay shows its own front surface once. For X-ray the
+depth buffer is cleared first, so overlays show through the skin. Overlay lines (bones) are drawn last without depth testing. Shaders live in `src/FVMeatbag.Rendering.Vulkan/Shaders` as GLSL with committed
 SPIR-V. Offscreen tests render real frames on any Vulkan driver, including Mesa's software
 lavapipe, and skip when there is none.
 

@@ -1,0 +1,131 @@
+{
+  "comment": "Muscles placed by UE5 Manny bone names. Bones of sided muscles are written without the side suffix (upperarm -> upperarm_l / upperarm_r). An anchor sits on 'bone', slid 'along' (0..1) towards 'toward', then moved by 'offset' = [forward, out, up], where 'out' points away from the center line. Offsets and radius are in body units: pelvis to head at rest. facing = [forward, out, up] the outer surface faces. tendons = [origin, insertion] fractions of the length. drives = corrective roles (see Rig/CorrectiveRoles.json) the muscle moves, with weights; many muscles may drive one role. Ids must stay stable because projects store them.",
+  "muscles": [
+    {
+      "id": "deltoid", "name": "Deltoid", "region": "Arm", "shape": "Flat",
+      "origin": { "bone": "clavicle", "toward": "upperarm", "along": 0.75, "offset": [0.0, 0.0, 0.03] },
+      "insertion": { "bone": "upperarm", "toward": "lowerarm", "along": 0.42, "offset": [0.0, 0.02, 0.0] },
+      "facing": [0.0, 1.0, 0.4], "radius": 0.05, "flatness": 0.6, "tendons": [0.05, 0.2],
+      "drives": [ { "role": "shoulder", "weight": 1.0 } ]
+    },
+    {
+      "id": "biceps", "name": "Biceps", "region": "Arm", "shape": "Fusiform",
+      "origin": { "bone": "upperarm", "toward": "lowerarm", "along": 0.1, "offset": [0.022, 0.0, 0.0] },
+      "insertion": { "bone": "lowerarm", "toward": "hand", "along": 0.1, "offset": [0.02, 0.0, 0.0] },
+      "facing": [1.0, 0.0, 0.0], "radius": 0.03, "flatness": 0.85, "thickness": 0.3, "tendons": [0.2, 0.15],
+      "drives": [ { "role": "bicep", "weight": 1.0 }, { "role": "elbow", "weight": 0.25 } ]
+    },
+    {
+      "id": "triceps", "name": "Triceps", "region": "Arm", "shape": "Fusiform",
+      "origin": { "bone": "upperarm", "toward": "lowerarm", "along": 0.1, "offset": [-0.022, 0.0, 0.0] },
+      "insertion": { "bone": "lowerarm", "toward": "hand", "along": 0.0, "offset": [-0.03, 0.0, 0.0] },
+      "facing": [-1.0, 0.0, 0.0], "radius": 0.032, "flatness": 0.75, "tendons": [0.1, 0.25],
+      "drives": [ { "role": "tricep", "weight": 1.0 }, { "role": "elbow", "weight": 0.25 } ]
+    },
+    {
+      "id": "forearm", "name": "Forearm flexors", "region": "Arm", "shape": "Fusiform",
+      "origin": { "bone": "upperarm", "toward": "lowerarm", "along": 0.95, "offset": [0.0, -0.025, 0.0] },
+      "insertion": { "bone": "hand", "offset": [0.0, 0.0, 0.0] },
+      "facing": [0.0, -1.0, 0.0], "radius": 0.03, "flatness": 0.8, "tendons": [0.05, 0.4],
+      "drives": [ { "role": "forearm", "weight": 1.0 }, { "role": "wrist", "weight": 0.3 }, { "role": "elbow", "weight": 0.15 } ]
+    },
+    {
+      "id": "pectoralis", "name": "Pectoralis major", "region": "Torso", "shape": "Flat",
+      "origin": { "bone": "spine_04", "toward": "spine_05", "along": 0.6, "offset": [0.1, 0.03, 0.0] },
+      "insertion": { "bone": "upperarm", "toward": "lowerarm", "along": 0.15, "offset": [0.02, 0.0, 0.0] },
+      "facing": [1.0, 0.0, 0.2], "radius": 0.085, "flatness": 0.3, "thickness": 0.2, "tendons": [0.0, 0.15],
+      "drives": [ { "role": "pectoralis", "weight": 1.0 }, { "role": "shoulder", "weight": 0.3 } ]
+    },
+    {
+      "id": "latissimus", "name": "Latissimus dorsi", "region": "Torso", "shape": "Flat",
+      "origin": { "bone": "spine_02", "toward": "spine_03", "along": 0.5, "offset": [-0.07, 0.035, 0.0] },
+      "insertion": { "bone": "upperarm", "toward": "lowerarm", "along": 0.15, "offset": [-0.015, -0.02, 0.0] },
+      "facing": [-1.0, 0.5, 0.0], "radius": 0.07, "flatness": 0.25, "tendons": [0.05, 0.15],
+      "drives": [ { "role": "latissimus", "weight": 1.0 }, { "role": "shoulder", "weight": 0.2 } ]
+    },
+    {
+      "id": "trapezius", "name": "Trapezius", "region": "Torso", "shape": "Flat",
+      "origin": { "bone": "neck_01", "toward": "neck_02", "along": 0.5, "offset": [-0.06, 0.0, 0.0] },
+      "insertion": { "bone": "clavicle", "toward": "upperarm", "along": 0.85, "offset": [-0.03, 0.0, -0.015] },
+      "facing": [-0.6, 0.0, 1.0], "radius": 0.06, "flatness": 0.35, "tendons": [0.05, 0.1],
+      "drives": [ { "role": "trapezius", "weight": 1.0 }, { "role": "shoulder", "weight": 0.2 } ]
+    },
+    {
+      "id": "sternocleidomastoid", "name": "Sternocleidomastoid", "region": "Neck", "shape": "Fusiform",
+      "origin": { "bone": "head", "offset": [-0.02, 0.04, 0.0] },
+      "insertion": { "bone": "clavicle", "offset": [-0.01, -0.04, 0.0] },
+      "facing": [1.0, 1.0, 0.0], "radius": 0.015, "flatness": 0.8, "tendons": [0.1, 0.1],
+      "drives": [ { "role": "sternocleidomastoid", "weight": 1.0 } ]
+    },
+    {
+      "id": "rectus_abdominis", "name": "Rectus abdominis", "region": "Torso", "sided": false, "shape": "Flat",
+      "origin": { "bone": "spine_04", "offset": [0.11, 0.0, 0.0] },
+      "insertion": { "bone": "pelvis", "offset": [0.08, 0.0, 0.02] },
+      "facing": [1.0, 0.0, 0.0], "radius": 0.07, "flatness": 0.25, "tendons": [0.05, 0.1],
+      "drives": [ { "role": "abdominals", "weight": 1.0 } ]
+    },
+    {
+      "id": "oblique", "name": "External oblique", "region": "Torso", "shape": "Flat",
+      "origin": { "bone": "spine_04", "offset": [0.06, 0.13, 0.0] },
+      "insertion": { "bone": "pelvis", "offset": [0.07, 0.12, 0.04] },
+      "facing": [0.4, 1.0, 0.0], "radius": 0.06, "flatness": 0.3, "tendons": [0.05, 0.1],
+      "drives": [ { "role": "oblique", "weight": 1.0 }, { "role": "abdominals", "weight": 0.2 } ]
+    },
+    {
+      "id": "gluteus", "name": "Gluteus maximus", "region": "Leg", "shape": "Flat",
+      "origin": { "bone": "pelvis", "offset": [-0.1, 0.05, 0.04] },
+      "insertion": { "bone": "thigh", "toward": "calf", "along": 0.2, "offset": [-0.025, 0.03, 0.0] },
+      "facing": [-1.0, 0.4, 0.0], "radius": 0.085, "flatness": 0.55, "thickness": 0.3, "tendons": [0.05, 0.15],
+      "drives": [ { "role": "gluteus", "weight": 1.0 } ]
+    },
+    {
+      "id": "iliopsoas", "name": "Iliopsoas", "region": "Leg", "shape": "Fusiform",
+      "origin": { "bone": "spine_01", "offset": [0.03, 0.05, 0.0] },
+      "insertion": { "bone": "thigh", "toward": "calf", "along": 0.1, "offset": [0.02, -0.02, 0.0] },
+      "facing": [1.0, 0.0, 0.0], "radius": 0.035, "flatness": 0.8, "tendons": [0.05, 0.2],
+      "drives": [ { "role": "hip_flexor", "weight": 1.0 } ]
+    },
+    {
+      "id": "quadriceps", "name": "Quadriceps", "region": "Leg", "shape": "Fusiform",
+      "origin": { "bone": "thigh", "toward": "calf", "along": 0.08, "offset": [0.05, 0.0, 0.0] },
+      "insertion": { "bone": "calf", "toward": "foot", "along": 0.06, "offset": [0.045, 0.0, 0.0] },
+      "facing": [1.0, 0.0, 0.0], "radius": 0.06, "flatness": 0.8, "thickness": 0.2, "tendons": [0.1, 0.2],
+      "drives": [ { "role": "quadriceps", "weight": 1.0 }, { "role": "knee", "weight": 0.4 } ]
+    },
+    {
+      "id": "hamstrings", "name": "Hamstrings", "region": "Leg", "shape": "Fusiform",
+      "origin": { "bone": "thigh", "toward": "calf", "along": 0.05, "offset": [-0.05, 0.0, 0.0] },
+      "insertion": { "bone": "calf", "toward": "foot", "along": 0.06, "offset": [-0.04, 0.0, 0.0] },
+      "facing": [-1.0, 0.0, 0.0], "radius": 0.05, "flatness": 0.85, "tendons": [0.1, 0.2],
+      "drives": [ { "role": "hamstring", "weight": 1.0 }, { "role": "knee", "weight": 0.3 } ]
+    },
+    {
+      "id": "adductors", "name": "Adductors", "region": "Leg", "shape": "Flat",
+      "origin": { "bone": "pelvis", "offset": [0.03, 0.04, -0.06] },
+      "insertion": { "bone": "thigh", "toward": "calf", "along": 0.55, "offset": [0.0, -0.035, 0.0] },
+      "facing": [0.0, -1.0, 0.0], "radius": 0.05, "flatness": 0.55, "tendons": [0.05, 0.1],
+      "drives": [ { "role": "adductor", "weight": 1.0 } ]
+    },
+    {
+      "id": "gastrocnemius", "name": "Gastrocnemius", "region": "Leg", "shape": "Fusiform",
+      "origin": { "bone": "thigh", "toward": "calf", "along": 0.95, "offset": [-0.035, 0.0, 0.0] },
+      "insertion": { "bone": "foot", "offset": [-0.03, 0.0, 0.0] },
+      "facing": [-1.0, 0.0, 0.0], "radius": 0.045, "flatness": 0.8, "thickness": 0.4, "tendons": [0.05, 0.45],
+      "drives": [ { "role": "gastrocnemius", "weight": 1.0 }, { "role": "achilles_tendon", "weight": 0.5 }, { "role": "knee", "weight": 0.15 } ]
+    },
+    {
+      "id": "soleus", "name": "Soleus", "region": "Leg", "shape": "Flat",
+      "origin": { "bone": "calf", "toward": "foot", "along": 0.15, "offset": [-0.03, 0.0, 0.0] },
+      "insertion": { "bone": "foot", "offset": [-0.03, 0.0, 0.0] },
+      "facing": [-1.0, 0.0, 0.0], "radius": 0.04, "flatness": 0.5, "tendons": [0.05, 0.35],
+      "drives": [ { "role": "achilles_tendon", "weight": 1.0 }, { "role": "gastrocnemius", "weight": 0.3 }, { "role": "ankle", "weight": 0.3 } ]
+    },
+    {
+      "id": "tibialis", "name": "Tibialis anterior", "region": "Leg", "shape": "Fusiform",
+      "origin": { "bone": "calf", "toward": "foot", "along": 0.1, "offset": [0.035, 0.015, 0.0] },
+      "insertion": { "bone": "foot", "toward": "ball", "along": 0.3, "offset": [0.0, -0.02, 0.0] },
+      "facing": [1.0, 0.0, 0.0], "radius": 0.025, "flatness": 0.8, "tendons": [0.05, 0.35],
+      "drives": [ { "role": "tibialis", "weight": 1.0 }, { "role": "ankle", "weight": 0.3 } ]
+    }
+  ]
+}
