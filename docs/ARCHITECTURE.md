@@ -87,8 +87,22 @@ Heavy data (meshes, textures) travels as references inside the structs. Change d
 `EqualityComparer<T>.Default`, so these should be immutable snapshots or versioned handles
 (`SkeletalMeshAsset.Version` sketches this), not buffers mutated behind the graph's back.
 
-Threading: single-threaded by design (the UI thread). Long work (import, bake) will become async
-operations that complete into a later pass. **Open:** async node API.
+Threading: single-threaded by design (the UI thread). Long work (a solve, a bake, an import) is an
+`AsyncOperation<TIn, TOut>`:
+
+- When the node evaluates, `RunAsync` starts on the thread pool with a copy of the inputs and the
+  node is `Running`. Its outputs keep their previous values and nothing downstream runs yet.
+- The result is queued and applied at the start of the next `Evaluate()`, like a normal run:
+  changed outputs propagate, a throw faults the node. The app's frame tick picks it up because
+  `HasPendingWork` includes finished work; `AsyncWorkCompleted` (raised off-thread) is there for
+  hosts without a tick.
+- An input change while running cancels and restarts the work; removing the node or
+  `node.Cancel()` cancels it. A superseded result is dropped. `node.Progress` reads what
+  `AsyncContext.ReportProgress` last reported.
+- `AsyncActionOperation` is the exec-pin flavour: the chain pauses at the node and continues
+  through `Then` (or whatever `AsyncContext.Fire` chose) once the work is done, so
+  "sample poses → simulate → solve → export" is one chain.
+- `evaluator.SettleAsync()` waits and evaluates until nothing is running, for tests and tools.
 
 ### Root graph, child graphs, subgraphs
 

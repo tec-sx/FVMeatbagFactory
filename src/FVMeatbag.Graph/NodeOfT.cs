@@ -14,6 +14,7 @@ public class Node<TIn, TOut> : Node
 
     private TIn _input;
     private TOut _output;
+    private AsyncJob? _job;
 
     public Node(Operation<TIn, TOut> operation, string? name = null, TIn initialInput = default)
         : base(name ?? operation.Name)
@@ -46,6 +47,8 @@ public class Node<TIn, TOut> : Node
     /// <summary>A copy of the current output values.</summary>
     public TOut OutputValues => _output;
 
+    public override Maybe<float> Progress => _job is { } job ? job.Context.Progress : Maybe<float>.None;
+
     internal ref TIn InputRef => ref _input;
     internal ref TOut OutputRef => ref _output;
 
@@ -75,6 +78,12 @@ public class Node<TIn, TOut> : Node
             input.Connection?.Transfer();
         }
 
+        if (Operation is AsyncOperation<TIn, TOut> async)
+        {
+            Start(async, context.Evaluator);
+            return NoChanges;
+        }
+
         var previous = _output;
         try
         {
@@ -100,6 +109,66 @@ public class Node<TIn, TOut> : Node
             }
         }
         return changed ?? NoChanges;
+    }
+
+    public override void Cancel() => _job?.Cancellation.Cancel();
+
+    internal override Maybe<AsyncCompletion> CompleteAsync(object job)
+    {
+        var finished = (AsyncJob)job;
+        if (finished != _job || Graph is null)
+        {
+            finished.Cancellation.Dispose();
+            return Maybe<AsyncCompletion>.None; // superseded by a newer run, or removed
+        }
+        _job = null;
+        finished.Cancellation.Dispose();
+
+        var task = finished.Task!;
+        if (!task.IsCompletedSuccessfully)
+        {
+            State = NodeState.Faulted;
+            Fault = task.IsCanceled
+                ? new OperationCanceledException($"{Name} was cancelled.")
+                : task.Exception!.InnerExceptions.Count == 1 ? task.Exception.InnerException! : task.Exception;
+            return new AsyncCompletion(NoChanges, []);
+        }
+
+        var previous = _output;
+        _output = task.Result;
+        State = NodeState.Clean;
+        Fault = null;
+        var changed = PortSchema<TOut>.Fields.Where(f => f.Differs(previous, _output)).Select(f => f.Index).ToArray();
+
+        IReadOnlyList<ExecOutput> fired = [.. finished.Context.FiredOutputs.Select(n => ExecOut(n))];
+        if (fired.Count == 0 && IsAction && ExecOutputs.Count == 1)
+        {
+            fired = ExecOutputs;
+        }
+        return new AsyncCompletion(changed, IsAction ? fired : []);
+    }
+
+    private void Start(AsyncOperation<TIn, TOut> operation, GraphEvaluator evaluator)
+    {
+        _job?.Cancellation.Cancel();
+        var cancellation = new CancellationTokenSource();
+        var job = new AsyncJob(cancellation, new AsyncContext(Name, [.. ExecOutputs.Select(o => o.Name)], cancellation.Token));
+        _job = job;
+        State = NodeState.Running;
+        Fault = null;
+
+        var input = _input;
+        var previous = _output;
+        evaluator.AsyncStarted();
+        job.Task = Task.Run(() => operation.RunAsync(input, previous, job.Context), cancellation.Token);
+        job.Task.ContinueWith(_ => evaluator.AsyncFinished(this, job), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+    }
+
+    private sealed class AsyncJob(CancellationTokenSource cancellation, AsyncContext context)
+    {
+        public CancellationTokenSource Cancellation { get; } = cancellation;
+        public AsyncContext Context { get; } = context;
+        public Task<TOut>? Task { get; set; }
     }
 
     private static bool AnyDiffers<T>(IReadOnlyList<PortField<T>> fields, in T a, in T b) where T : struct
