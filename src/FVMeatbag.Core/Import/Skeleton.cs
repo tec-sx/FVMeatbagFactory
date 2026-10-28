@@ -15,13 +15,21 @@ public sealed record Bone(string Name, int Parent, Matrix4x4 LocalRest);
 /// Bones are ordered so every parent comes before its children.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Mesh vertices are stored already deformed into this rest pose, so the bind pose is the rest
 /// pose: skinning with <see cref="InverseBind"/> and the rest world matrices gives the mesh back
 /// unchanged. A <see cref="SkeletonPose"/> holds a pose as each bone's transform relative to its parent.
+/// </para>
+/// <para>
+/// The hierarchy and rest pose never change. Bone names can (<see cref="Rename"/>), so skeletons
+/// can be fitted to a naming contract; renames bump <see cref="Version"/>, and the name each bone
+/// was imported with stays available as <see cref="SourceName"/>.
+/// </para>
 /// </remarks>
 public sealed class Skeleton
 {
     private readonly Bone[] _bones;
+    private readonly string[] _sourceNames;
     private readonly Matrix4x4[] _worldRest;
     private readonly Matrix4x4[] _inverseBind;
 
@@ -29,6 +37,7 @@ public sealed class Skeleton
     {
         ArgumentNullException.ThrowIfNull(bones);
         _bones = [.. bones];
+        _sourceNames = [.. _bones.Select(b => b.Name)];
         _worldRest = new Matrix4x4[_bones.Length];
         _inverseBind = new Matrix4x4[_bones.Length];
         for (var i = 0; i < _bones.Length; i++)
@@ -46,6 +55,42 @@ public sealed class Skeleton
 
     public IReadOnlyList<Bone> Bones => _bones;
     public int Count => _bones.Length;
+
+    /// <summary>Bumped by every <see cref="Rename"/>.</summary>
+    public long Version { get; private set; }
+
+    /// <summary>Raised after a bone was renamed.</summary>
+    public event EventHandler? Renamed;
+
+    /// <summary>The name the bone had when the skeleton was created (imported).</summary>
+    public string SourceName(int bone) => _sourceNames[bone];
+
+    /// <summary>
+    /// Renames a bone. Names must be non-empty and unique ignoring case, as UE requires; returns
+    /// false (and changes nothing) for a name another bone already has.
+    /// </summary>
+    public bool Rename(int bone, string name)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(bone);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(bone, _bones.Length);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        name = name.Trim();
+        if (_bones[bone].Name == name)
+        {
+            return true;
+        }
+        for (var i = 0; i < _bones.Length; i++)
+        {
+            if (i != bone && string.Equals(_bones[i].Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+        _bones[bone] = _bones[bone] with { Name = name };
+        Version++;
+        Renamed?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
 
     /// <summary>Model-space rest transform of each bone.</summary>
     public IReadOnlyList<Matrix4x4> WorldRest => _worldRest;

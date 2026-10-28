@@ -1,0 +1,28 @@
+{
+  "comment": "Corrective bone roles. id: the word(s) in bone names, joined by '_'. parent: the Manny bone (without side) the corrective usually hangs under. aliases: other spellings that name the same role. Add roles freely; ids must stay stable because projects store them.",
+  "roles": [
+    { "id": "trapezius", "name": "Trapezius", "region": "Torso", "parent": "spine_05", "aliases": ["trap", "traps"] },
+    { "id": "pectoralis", "name": "Pectoralis", "region": "Torso", "parent": "spine_05", "aliases": ["pec", "pecs", "pectoral", "chest"] },
+    { "id": "latissimus", "name": "Latissimus dorsi", "region": "Torso", "parent": "spine_04", "aliases": ["lat", "lats", "latissimus_dorsi"] },
+    { "id": "scapula", "name": "Scapula", "region": "Torso", "parent": "spine_05", "aliases": ["scap", "shoulder_blade"] },
+    { "id": "abdominals", "name": "Abdominals", "region": "Torso", "parent": "spine_02", "sided": false, "aliases": ["abs", "abdominal", "rectus_abdominis"] },
+    { "id": "oblique", "name": "Obliques", "region": "Torso", "parent": "spine_02", "aliases": ["obliques"] },
+    { "id": "sternocleidomastoid", "name": "Sternocleidomastoid", "region": "Neck", "parent": "neck_01", "aliases": ["scm"] },
+    { "id": "shoulder", "name": "Shoulder (deltoid)", "region": "Arm", "parent": "upperarm", "aliases": ["deltoid", "delt", "delts"] },
+    { "id": "bicep", "name": "Biceps", "region": "Arm", "parent": "upperarm", "aliases": ["biceps"] },
+    { "id": "tricep", "name": "Triceps", "region": "Arm", "parent": "upperarm", "aliases": ["triceps"] },
+    { "id": "elbow", "name": "Elbow", "region": "Arm", "parent": "lowerarm", "aliases": [] },
+    { "id": "forearm", "name": "Forearm", "region": "Arm", "parent": "lowerarm", "aliases": ["forearms"] },
+    { "id": "wrist", "name": "Wrist", "region": "Arm", "parent": "hand", "aliases": [] },
+    { "id": "gluteus", "name": "Gluteus", "region": "Leg", "parent": "pelvis", "aliases": ["glute", "glutes", "buttock"] },
+    { "id": "hip_flexor", "name": "Hip flexor", "region": "Leg", "parent": "pelvis", "aliases": ["hipflexor", "psoas", "iliopsoas"] },
+    { "id": "quadriceps", "name": "Quadriceps", "region": "Leg", "parent": "thigh", "aliases": ["quad", "quads", "quadricep"] },
+    { "id": "hamstring", "name": "Hamstrings", "region": "Leg", "parent": "thigh", "aliases": ["hamstrings"] },
+    { "id": "adductor", "name": "Adductors", "region": "Leg", "parent": "thigh", "aliases": ["adductors", "inner_thigh"] },
+    { "id": "knee", "name": "Knee", "region": "Leg", "parent": "calf", "aliases": ["patella", "kneecap"] },
+    { "id": "gastrocnemius", "name": "Gastrocnemius (calf muscle)", "region": "Leg", "parent": "calf", "aliases": ["gastroc", "calf_muscle"] },
+    { "id": "tibialis", "name": "Tibialis (shin)", "region": "Leg", "parent": "calf", "aliases": ["tibialis_anterior", "shin"] },
+    { "id": "achilles_tendon", "name": "Achilles tendon", "region": "Leg", "parent": "calf", "aliases": ["achilles"] },
+    { "id": "ankle", "name": "Ankle", "region": "Leg", "parent": "foot", "aliases": [] }
+  ]
+}

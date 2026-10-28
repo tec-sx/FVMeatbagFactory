@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FVMeatbag.Core.Import;
 using FVMeatbag.Core.Project;
+using FVMeatbag.Core.Rig;
 using FVMeatbag.Graph;
 using FVMeatbag.Scene;
 using FVMeatbag.Scene.Components;
@@ -187,7 +188,7 @@ public sealed partial class SkeletonDetailsViewModel : DetailsViewModel, IDispos
             // Like Maya's joint orient, the rest rotation is factored out so a bone at rest reads 0, 0, 0
             // and turning it about its own Z changes only Z: local = delta, then rest (row vectors).
             var rotate = BoneTransform.EulerDegrees(Quaternion.Concatenate(pose.Rotation, Quaternion.Inverse(rest.Rotation)));
-            return $"{bone.Name}\nParent: {parent}\nChildren: {children}\nSide: {BoneDisplayOperation.SideOf(bone.Name)}\n"
+            return $"{bone.Name}\nParent: {parent}\nChildren: {children}\nSide: {BoneNames.SideOf(bone.Name)}\n"
                 + $"Translate {Format(pose.Translation)}\nRotate {Format(rotate, 1)}°\nScale {Format(pose.Scale)}"
                 + (_skeleton.Pose.IsPosed(index) ? "\nPosed" : "\nAt rest");
         },

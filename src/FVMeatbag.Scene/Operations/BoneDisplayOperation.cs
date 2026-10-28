@@ -1,6 +1,6 @@
 using System.Numerics;
-using System.Text.RegularExpressions;
 using FVMeatbag.Core.Import;
+using FVMeatbag.Core.Rig;
 using FVMeatbag.Graph;
 
 namespace FVMeatbag.Scene.Operations;
@@ -33,16 +33,12 @@ public static class MayaBoneColors
     public static readonly Vector3 Center = new(1.00f, 0.90f, 0.20f);
 }
 
-public enum BoneSide
-{
-    Center,
-    Left,
-    Right,
-}
-
 public struct BoneDisplayInput
 {
     public Maybe<Skeleton> Skeleton;
+
+    /// <summary>The skeleton's <see cref="Core.Import.Skeleton.Version"/>; colors follow the bone names.</summary>
+    public long SkeletonVersion;
 
     /// <summary>Model-space bone transforms of the current pose; empty means the rest pose.</summary>
     public ReadOnlyMemory<Matrix4x4> BoneWorld;
@@ -73,7 +69,7 @@ public struct BoneDisplayOutput
 /// Draws a skeleton the way Maya does: a wire sphere (three circles) on every joint and a wire
 /// pyramid from each joint to each child. Joints without children only get their sphere.
 /// </summary>
-public sealed partial class BoneDisplayOperation : Operation<BoneDisplayInput, BoneDisplayOutput>
+public sealed class BoneDisplayOperation : Operation<BoneDisplayInput, BoneDisplayOutput>
 {
     private const int CircleSegments = 16;
 
@@ -121,33 +117,13 @@ public sealed partial class BoneDisplayOperation : Operation<BoneDisplayInput, B
     public static Vector3 ColorOf(string boneName, BoneColorMode mode) => mode switch
     {
         BoneColorMode.Uniform => MayaBoneColors.Default,
-        _ => SideOf(boneName) switch
+        _ => BoneNames.SideOf(boneName) switch
         {
             BoneSide.Left => MayaBoneColors.Left,
             BoneSide.Right => MayaBoneColors.Right,
             _ => MayaBoneColors.Center,
         },
     };
-
-    /// <summary>
-    /// Reads the side from common naming schemes: Blender/Rigify (<c>hand.L</c>, <c>hand_R</c>),
-    /// Maya/UE (<c>L_hand</c>, <c>hand_l</c>) and Mixamo (<c>LeftHand</c>, <c>mixamorig:RightArm</c>).
-    /// </summary>
-    public static BoneSide SideOf(string boneName)
-    {
-        ArgumentNullException.ThrowIfNull(boneName);
-        if (LeftPattern().IsMatch(boneName))
-        {
-            return BoneSide.Left;
-        }
-        return RightPattern().IsMatch(boneName) ? BoneSide.Right : BoneSide.Center;
-    }
-
-    [GeneratedRegex(@"([._\-\s]L$)|(^L[._\-])|([._\-]L[._\-])|(left)", RegexOptions.IgnoreCase)]
-    private static partial Regex LeftPattern();
-
-    [GeneratedRegex(@"([._\-\s]R$)|(^R[._\-])|([._\-]R[._\-])|(right)", RegexOptions.IgnoreCase)]
-    private static partial Regex RightPattern();
 
     private static void AddSphere(List<ColoredLine> lines, Vector3 center, float radius, Vector3 color)
     {

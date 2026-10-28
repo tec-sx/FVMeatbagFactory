@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FVMeatbag.Core.Import;
+using FVMeatbag.Core.Rig;
 using FVMeatbag.Graph;
 
 namespace FVMeatbag.Core.Project;
@@ -71,10 +72,15 @@ public static class ProjectFile
             var loaded = project.ResolvePath(mesh.Path).Bind(file => TryImport(file, problems));
             asset.Geometry = loaded.Map(l => l.Geometry);
             asset.Skeleton = loaded.Bind(l => l.Skeleton);
+            if (asset.Skeleton.TryGetValue(out var skeleton))
+            {
+                mesh.ApplyRenames(asset, skeleton, problems);
+            }
             if (asset.Pose.TryGetValue(out var pose))
             {
                 mesh.ApplyPose(pose, problems);
             }
+            mesh.ApplyCorrectives(asset.Correctives);
         }
         return project;
     }
@@ -144,20 +150,65 @@ public static class ProjectFile
         public string? Name { get; set; }
         public string? Path { get; set; }
 
+        /// <summary>Bones renamed in the app, by the name they were imported with.</summary>
+        public List<BoneRenameDocument>? Renames { get; set; }
+
         /// <summary>Posed bones only; bones at rest are left out.</summary>
         public List<BonePoseDocument>? Pose { get; set; }
+
+        /// <summary>Corrective bones with a role or a non-default mode.</summary>
+        public List<CorrectiveDocument>? Correctives { get; set; }
 
         public static MeshDocument From(SkeletalMeshAsset asset)
         {
             var posed = asset.Pose.Match(
                 p => Enumerable.Range(0, p.Skeleton.Count).Where(p.IsPosed).Select(b => BonePoseDocument.From(p, b)).ToList(),
                 () => []);
+            var renames = asset.Skeleton.Match(
+                s => Enumerable.Range(0, s.Count)
+                    .Where(b => s.SourceName(b) != s.Bones[b].Name)
+                    .Select(b => new BoneRenameDocument { Source = s.SourceName(b), Name = s.Bones[b].Name })
+                    .ToList(),
+                () => []);
+            var correctives = asset.Correctives.Bindings
+                .OrderBy(b => b.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(b => CorrectiveDocument.From(b.Key, b.Value))
+                .ToList();
             return new MeshDocument
             {
                 Name = asset.Name,
                 Path = asset.SourcePath?.Replace('\\', '/'),
+                Renames = renames.Count > 0 ? renames : null,
                 Pose = posed.Count > 0 ? posed : null,
+                Correctives = correctives.Count > 0 ? correctives : null,
             };
+        }
+
+        public void ApplyRenames(SkeletalMeshAsset asset, Skeleton skeleton, ICollection<string>? problems)
+        {
+            foreach (var rename in Renames ?? [])
+            {
+                var bone = Enumerable.Range(0, skeleton.Count).FirstOrNone(b => skeleton.SourceName(b) == rename.Source);
+                if (!bone.TryGetValue(out var index) || string.IsNullOrWhiteSpace(rename.Name))
+                {
+                    problems?.Add($"{Name}: a rename names a bone the skeleton lacks ({rename.Source}).");
+                }
+                else if (!asset.RenameBone(index, rename.Name))
+                {
+                    problems?.Add($"{Name}: cannot rename {rename.Source} to {rename.Name}; another bone has that name.");
+                }
+            }
+        }
+
+        public void ApplyCorrectives(CorrectiveSetup setup)
+        {
+            foreach (var corrective in Correctives ?? [])
+            {
+                if (!string.IsNullOrWhiteSpace(corrective.Bone))
+                {
+                    setup.Set(corrective.Bone, corrective.ToBinding());
+                }
+            }
         }
 
         public void ApplyPose(SkeletonPose pose, ICollection<string>? problems)
@@ -173,6 +224,42 @@ public static class ProjectFile
                     problems?.Add($"{Name}: the pose names a bone the skeleton lacks ({bone.Bone}).");
                 }
             }
+        }
+    }
+
+    private sealed class BoneRenameDocument
+    {
+        public string? Source { get; set; }
+        public string? Name { get; set; }
+    }
+
+    private sealed class CorrectiveDocument
+    {
+        public string? Bone { get; set; }
+        public string? Role { get; set; }
+        public string? Side { get; set; }
+        public string? Part { get; set; }
+
+        /// <summary>Left out for <see cref="CorrectiveMode.Solve"/>.</summary>
+        public string? Mode { get; set; }
+
+        public static CorrectiveDocument From(string bone, CorrectiveBinding binding) => new()
+        {
+            Bone = bone,
+            Role = binding.Tag.Match(t => t.Role, () => (string?)null),
+            Side = binding.Tag.Match(t => t.Side.ToString().ToLowerInvariant(), () => (string?)null),
+            Part = binding.Tag.Bind(t => t.Part).Match(p => p, () => (string?)null),
+            Mode = binding.Mode == CorrectiveMode.Solve ? null : binding.Mode.ToString().ToLowerInvariant(),
+        };
+
+        public CorrectiveBinding ToBinding()
+        {
+            var tag = string.IsNullOrWhiteSpace(Role)
+                ? Maybe<CorrectiveTag>.None
+                : new CorrectiveTag(Role, Enum.TryParse<BoneSide>(Side, ignoreCase: true, out var side) ? side : BoneSide.Center,
+                    string.IsNullOrWhiteSpace(Part) ? Maybe<string>.None : Part);
+            var mode = Enum.TryParse<CorrectiveMode>(Mode, ignoreCase: true, out var m) ? m : CorrectiveMode.Solve;
+            return new CorrectiveBinding(tag, mode);
         }
     }
 

@@ -10,6 +10,9 @@
     <ProjectReference Include="..\FVMeatbag.Graph\FVMeatbag.Graph.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Rig\CorrectiveRoles.json" LogicalName="FVMeatbag.Core.Rig.CorrectiveRoles.json" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="SharpGLTF.Core" />
     <PackageReference Include="Silk.NET.Assimp" />
   </ItemGroup>

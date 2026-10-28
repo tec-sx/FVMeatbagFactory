@@ -1,6 +1,7 @@
 using System.Numerics;
 using FVMeatbag.Core.Import;
 using FVMeatbag.Core.Project;
+using FVMeatbag.Core.Rig;
 using FVMeatbag.Graph;
 using FVMeatbag.Scene.Components;
 using FVMeatbag.Scene.Operations;
@@ -25,7 +26,7 @@ public sealed class BoneDisplayTests : IDisposable
     [InlineData("Hips", BoneSide.Center)]
     [InlineData("Root", BoneSide.Center)]
     public void Side_comes_from_common_naming_schemes(string name, BoneSide side) =>
-        Assert.Equal(side, BoneDisplayOperation.SideOf(name));
+        Assert.Equal(side, BoneNames.SideOf(name));
 
     [Fact]
     public void Joints_get_spheres_and_parents_get_pyramids_in_maya_side_colors()
