@@ -211,6 +211,11 @@
                 <StackPanel Grid.Row="0" Spacing="4">
                   <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
                   <TextBlock Text="{Binding Summary}" />
+                  <TextBlock Text="{Binding RigSummary}" TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding RigProblems}" IsVisible="{Binding HasRigProblems}" TextWrapping="Wrap"
+                             Foreground="{DynamicResource Theme.DimText}" FontSize="{DynamicResource Theme.SmallFontSize}" />
+                  <Button Content="Suggest corrective roles" Command="{Binding SuggestRolesCommand}" IsVisible="{Binding CanEditCorrectives}"
+                          ToolTip.Tip="Tag every extra bone whose name says what it is (bicep_l, quad_upper_r, ...)" Padding="8,2" />
                   <CheckBox Content="Show bones" IsChecked="{Binding ShowBones}" />
                   <DockPanel>
                     <Button DockPanel.Dock="Right" Content="Reset" Command="{Binding ResetBoneSizeCommand}" Padding="8,2" />
@@ -224,13 +229,15 @@
                   <Button DockPanel.Dock="Right" Content="Deselect" Command="{Binding ClearSelectionCommand}" Padding="8,2" />
                   <TextBlock Text="Bones" FontWeight="SemiBold" VerticalAlignment="Center" />
                 </DockPanel>
-                <Border Grid.Row="2" BorderBrush="{DynamicResource Theme.Border}" BorderThickness="1" CornerRadius="3">
+                <Border Grid.Row="2" BorderBrush="{DynamicResource Theme.Border}" BorderThickness="1" CornerRadius="3" MinHeight="160">
                   <TreeView ItemsSource="{Binding Bones}" SelectedItem="{Binding SelectedBone}">
                     <TreeView.ItemTemplate>
                       <TreeDataTemplate DataType="vm:BoneNodeViewModel" ItemsSource="{Binding Children}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <Ellipse Width="8" Height="8" Fill="{Binding Color}" VerticalAlignment="Center" />
                           <TextBlock Text="{Binding Name}" Classes.selectedBone="{Binding IsHighlighted}" />
+                          <TextBlock Text="{Binding Badge}" Foreground="{DynamicResource Theme.DimText}" FontSize="{DynamicResource Theme.SmallFontSize}"
+                                     VerticalAlignment="Center" />
                         </StackPanel>
                       </TreeDataTemplate>
                     </TreeView.ItemTemplate>
@@ -242,13 +249,35 @@
                     </TreeView.Styles>
                   </TreeView>
                 </Border>
-                <StackPanel Grid.Row="3" Spacing="6" Margin="0,8,0,0">
+                <ScrollViewer Grid.Row="3" MaxHeight="330" Margin="0,8,0,0">
+                <StackPanel Spacing="6">
                   <TextBlock Text="{Binding SelectedBoneInfo}" TextWrapping="Wrap" Opacity="0.85" />
                   <StackPanel Orientation="Horizontal" Spacing="6">
                     <Button Content="Reset bone" Command="{Binding ResetBoneCommand}" Padding="8,2" />
                     <Button Content="Reset pose" Command="{Binding ResetPoseCommand}" IsEnabled="{Binding IsPosed}" Padding="8,2" />
                   </StackPanel>
+                  <DockPanel IsVisible="{Binding HasSelectedBone}">
+                    <Button DockPanel.Dock="Right" Content="Rename" Command="{Binding RenameBoneCommand}" Padding="8,2" Margin="6,0,0,0" />
+                    <TextBox Text="{Binding BoneNameEdit}" />
+                  </DockPanel>
+                  <TextBlock Text="{Binding SelectedBoneKind}" Opacity="0.85" />
+                  <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto" IsVisible="{Binding IsSelectedExtra}"
+                        ColumnSpacing="6" RowSpacing="4">
+                    <TextBlock Grid.Row="0" Text="Role" VerticalAlignment="Center" />
+                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding RoleChoices}" SelectedIndex="{Binding RoleIndex}" HorizontalAlignment="Stretch" />
+                    <TextBlock Grid.Row="1" Text="Side" VerticalAlignment="Center" />
+                    <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding SideChoices}" SelectedIndex="{Binding SideIndex}"
+                              IsEnabled="{Binding HasRole}" HorizontalAlignment="Stretch" />
+                    <TextBlock Grid.Row="2" Text="Part" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Part}" IsEnabled="{Binding HasRole}" PlaceholderText="hi, lo, inner… (optional)" />
+                    <TextBlock Grid.Row="3" Text="Solve" VerticalAlignment="Center" />
+                    <ComboBox Grid.Row="3" Grid.Column="1" ItemsSource="{Binding ModeChoices}" SelectedIndex="{Binding ModeIndex}" HorizontalAlignment="Stretch"
+                              ToolTip.Tip="Solve: fitted by the corrective solve. Lock: keeps its weights. Ignore: not a corrective." />
+                  </Grid>
+                  <Button Content="Mirror to other side" Command="{Binding MirrorCorrectiveCommand}" IsVisible="{Binding IsSelectedExtra}" Padding="8,2" />
+                  <TextBlock Text="{Binding CorrectiveStatus}" TextWrapping="Wrap" Opacity="0.85" />
                 </StackPanel>
+                </ScrollViewer>
               </Grid>
             </DataTemplate>
           </ContentControl.DataTemplates>

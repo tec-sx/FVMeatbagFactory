@@ -1,6 +1,7 @@
 using System.Numerics;
 using FVMeatbag.Core.Import;
 using FVMeatbag.Core.Project;
+using FVMeatbag.Core.Rig;
 
 namespace FVMeatbag.Scene.Tests;
 
@@ -33,10 +34,10 @@ public sealed class ProjectTests : IDisposable
         var demo = ProjectFile.Load(workspace.EnsureCreated(SkeletonImportTests.SamplePath("Demo")));
 
         var mesh = Assert.Single(demo.MeshAssets);
-        Assert.Equal("MaleBaseMesh", mesh.Name);
-        Assert.Equal("Meshes/MaleBaseMesh.glb", mesh.SourcePath);
-        Assert.True(File.Exists(_temp.Combine("Projects", "Demo", "Meshes", "MaleBaseMesh.glb")));
-        Assert.Equal(56, mesh.Skeleton.Value.Count);
+        Assert.Equal("MannyBaseMesh", mesh.Name);
+        Assert.Equal("Meshes/MannyBaseMesh.glb", mesh.SourcePath);
+        Assert.True(File.Exists(_temp.Combine("Projects", "Demo", "Meshes", "MannyBaseMesh.glb")));
+        Assert.True(MannyRig.Check(mesh.Skeleton.Value).IsConformant);
         Assert.True(mesh.Pose.Value.IsRest);
         Assert.Equal(90, demo.Camera.YawDegrees); // the sample faces +X
     }
@@ -49,7 +50,7 @@ public sealed class ProjectTests : IDisposable
 
         var demo = ProjectFile.Load(workspace.EnsureCreated(SkeletonImportTests.SamplePath("Demo")));
 
-        Assert.Equal("MaleBaseMesh", Assert.Single(demo.MeshAssets).Name);
+        Assert.Equal("MannyBaseMesh", Assert.Single(demo.MeshAssets).Name);
     }
 
     [Fact]

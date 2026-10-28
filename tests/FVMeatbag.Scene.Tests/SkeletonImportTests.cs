@@ -53,9 +53,9 @@ public sealed class SkeletonImportTests : IDisposable
     }
 
     [Fact]
-    public void The_sample_character_imports_upright_with_its_metarig()
+    public void The_cc0_base_mesh_imports_upright_with_its_metarig()
     {
-        var mesh = GltfImporter.Load(SamplePath("Demo", "Meshes", "MaleBaseMesh.glb"));
+        var mesh = GltfImporter.Load(FbxImportTests.FixturePath("MaleBaseMesh.glb"));
 
         var skeleton = mesh.Skeleton.Value;
         Assert.Equal(56, skeleton.Count);

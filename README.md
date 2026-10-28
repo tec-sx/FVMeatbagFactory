@@ -23,7 +23,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design.
 ## Using it
 
 On first start the app installs the saved Demo project ([assets/Samples/Demo](assets/Samples/Demo/README.md))
-as `Documents/Projects/Demo`, with a rigged sample character (3D Male Base Mesh, CC0), and opens it. Every project has one
+as `Documents/Projects/Demo`, with a sample character on the UE5 Manny skeleton (the CC0 3D Male Base Mesh, re-rigged), and opens it. Every project has one
 camera and one light; select them in the outliner to adjust them.
 
 - **File → Import Mesh** (Ctrl+I) loads a `.glb`/`.gltf` or `.fbx` into the open project and places it at

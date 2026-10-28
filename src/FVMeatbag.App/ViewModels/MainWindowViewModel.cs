@@ -271,7 +271,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             OrbitCameraComponent camera => new CameraDetailsViewModel(camera),
             DirectionalLightComponent light => new LightDetailsViewModel(light),
             MeshComponent mesh => new MeshDetailsViewModel(Host.Scene, mesh),
-            SkeletonComponent skeleton => new SkeletonDetailsViewModel(skeleton),
+            SkeletonComponent skeleton => new SkeletonDetailsViewModel(
+                skeleton, Maybe.From(skeleton.Parent as MeshComponent).Bind(Host.Scene.FindAsset)),
             _ => null,
         };
     }

@@ -1,7 +1,8 @@
 # Test fixtures
 
-FBX exports of the Demo character (`assets/Samples/Demo/Meshes/MaleBaseMesh.glb`, CC0, see
-`MaleBaseMesh.LICENSE.txt` next to it), used to check the FBX importer against the glTF one.
+`MaleBaseMesh.glb` is the CC0 base mesh with its original Blender metarig (56 bones, see
+`MaleBaseMesh.LICENSE.txt`). The Demo character is built from it by `tools/MannyRerig`. The FBX
+files are exports of it, used to check the FBX importer against the glTF one.
 
 | File | Blender export settings |
 | --- | --- |

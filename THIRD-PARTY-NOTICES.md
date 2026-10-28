@@ -68,6 +68,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ## 3D Male Base Mesh
 
-`assets/Samples/Demo/Meshes/MaleBaseMesh.glb` by orange-juice-games, CC0 1.0 (public domain).
-See the [Demo project README](assets/Samples/Demo/README.md) and `MaleBaseMesh.LICENSE.txt` next to the file.
+`tests/FVMeatbag.Scene.Tests/Fixtures/MaleBaseMesh.glb` by orange-juice-games, CC0 1.0 (public domain),
+and `assets/Samples/Demo/Meshes/MannyBaseMesh.glb`, the same mesh re-rigged to the UE5 Manny skeleton.
+See the [Demo project README](assets/Samples/Demo/README.md) and the `.LICENSE.txt` file next to each.
 The FBX test fixtures in `tests/FVMeatbag.Scene.Tests/Fixtures` are Blender exports of the same character.

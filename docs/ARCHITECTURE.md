@@ -153,7 +153,7 @@ Documents/Projects/            ← ProjectWorkspace, created on first run like a
 └── Demo/                      ← installed on first run from assets/Samples/Demo and opened at startup
     ├── project.json           ← name, camera, light, mesh list (paths relative to the folder), poses
     └── Meshes/
-        └── MaleBaseMesh.glb   ← the sample character (CC0); imported files are copied here too,
+        └── MannyBaseMesh.glb  ← the sample character (CC0); imported files are copied here too,
                                  so the folder is self-contained
 ```
 
@@ -239,6 +239,29 @@ the camera on it.
 
 Undo/redo should live at the graph-edit level (input changes, connect, add/remove) as commands.
 **Open.**
+
+### Rig contract: UE5 Manny and corrective roles
+
+The muscle and corrective system (design: the "Muscle and corrective bone system" proposal) relies
+on bone names, so skeletons follow a contract (`FVMeatbag.Core.Rig`):
+
+- **Core bones** are the UE5 Manny body (`MannySkeleton`): names and hierarchy, compared ignoring
+  case like UE. Twist, IK, `interaction` and `center_of_mass` bones are optional, but must sit
+  under the right parent when present. `MannyRig.Check` lists every problem (missing bone, wrong
+  parent, duplicate name, second root) or returns a `MannyRig`; the `MannyCheckOperation` node in
+  each skeleton's graph re-checks after renames, and downstream nodes take its `Maybe<MannyRig>`.
+- **Extras** are every other bone: correctives, face bones, sockets. They may hang anywhere below
+  the core, never above a core bone. `DriverOf` gives the core bone an extra follows.
+- **Corrective roles** (`CorrectiveRoleCatalog`, from the embedded `CorrectiveRoles.json`) say
+  what an extra stands for (biceps, knee, Achilles tendon), whatever it is called. A
+  `CorrectiveTag` is role + side + optional part (`bicep_hi_l`). Names suggest tags
+  (`bicep_l`, `Quad_Upper_R`, `hipFlexor_02_L`), the user can retag, mirror to the other side or
+  rename the bone, and each extra has a mode: Solve, Lock (keep its weights) or Ignore. The
+  `CorrectiveSetup` lives on the mesh asset and is saved in `project.json` with bone renames
+  (keyed by the imported name).
+- The Demo character is the CC0 base mesh re-rigged by `tools/MannyRerig` to the Manny hierarchy,
+  with 26 sample correctives that carry no weights yet. User meshes stay out of the repository
+  (`assets/Private/` is git-ignored and CI fails on mesh files outside samples and fixtures).
 
 ## 4. Rendering
 
