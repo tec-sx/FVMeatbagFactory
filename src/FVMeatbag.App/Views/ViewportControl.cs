@@ -50,6 +50,7 @@ public sealed class ViewportControl : Control
     private bool _dragging;
     private bool _clickCandidate;
     private bool _gizmoDragging;
+    private TopLevel? _topLevel;
 
     public ViewportControl()
     {
@@ -84,7 +85,7 @@ public sealed class ViewportControl : Control
         }
         else if (_bitmap is not null)
         {
-            context.DrawImage(_bitmap, bounds);
+            context.DrawImage(_bitmap, new Rect(_bitmap.Size), bounds);
         }
     }
 
@@ -239,12 +240,30 @@ public sealed class ViewportControl : Control
         }
     }
 
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _topLevel = TopLevel.GetTopLevel(this);
+        if (_topLevel is not null)
+        {
+            _topLevel.ScalingChanged += OnScalingChanged;
+        }
+        RequestFrame();
+    }
+
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
+        if (_topLevel is not null)
+        {
+            _topLevel.ScalingChanged -= OnScalingChanged;
+            _topLevel = null;
+        }
         base.OnDetachedFromVisualTree(e);
         _bitmap?.Dispose();
         _bitmap = null;
     }
+
+    private void OnScalingChanged(object? sender, EventArgs e) => RequestFrame();
 
     private void OnGraphEvaluated(object? sender, int evaluated) => RequestFrame();
 
@@ -331,7 +350,7 @@ public sealed class ViewportControl : Control
             if (_bitmap is null || _bitmap.PixelSize.Width != width || _bitmap.PixelSize.Height != height)
             {
                 _bitmap?.Dispose();
-                _bitmap = new WriteableBitmap(new PixelSize(width, height), new Vector(96 * scaling, 96 * scaling), PixelFormat.Bgra8888, AlphaFormat.Opaque);
+                _bitmap = new WriteableBitmap(new PixelSize(width, height), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Opaque);
             }
             using (var framebuffer = _bitmap.Lock())
             {
