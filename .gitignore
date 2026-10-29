@@ -61,3 +61,7 @@ nunit-*.xml
 .idea/
 *.user
 .DS_Store
+
+# Private assets (e.g. your own character meshes): never committed, the repository is public.
+# Keep them in a project under Documents/Projects, or here for local experiments.
+assets/Private/

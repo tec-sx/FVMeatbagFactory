@@ -1,0 +1,979 @@
+{
+  "comment": "The human muscle template of the Flicker Void tools (meatbag_factory/anatomy.py), for UE4 and UE5 Mannequin skeletons. Every muscle is written for the left side and mirrored. A muscle is a list of strands [origin, insertion]: one for a simple muscle, several for a fan (pectoral, trapezius, quadriceps). Hooks are extra points a strand also bends with (gluteus). An attachment sits 'along' its bone (0 at the joint, 1 at the next joint of the chain), and is pushed toward the skin in 'direction' = [front, left, up] of the body, keeping 'depth' (default 0.4) of the way back from the skin. width and thickness scale the room under the skin at the belly. drives = corrective roles (Rig/CorrectiveRoles.json) the muscle moves, with weights. Names must stay stable: projects store them.",
+  "aliases": {
+    "chest": [
+      "spine_05",
+      "spine_03"
+    ],
+    "midspine": [
+      "spine_03",
+      "spine_02"
+    ],
+    "neck": [
+      "neck_01"
+    ]
+  },
+  "required": [
+    "pelvis",
+    "spine_01",
+    "spine_02",
+    "spine_03",
+    "neck_01",
+    "head",
+    "clavicle_l",
+    "upperarm_l",
+    "lowerarm_l",
+    "hand_l",
+    "thigh_l",
+    "calf_l",
+    "foot_l",
+    "clavicle_r",
+    "upperarm_r",
+    "thigh_r"
+  ],
+  "colors": {
+    "red": [
+      0.75,
+      0.2,
+      0.2
+    ],
+    "dark": [
+      0.55,
+      0.12,
+      0.15
+    ],
+    "pink": [
+      0.85,
+      0.4,
+      0.4
+    ]
+  },
+  "muscles": [
+    {
+      "name": "Sternocleidomastoid_l",
+      "strands": [
+        [
+          {
+            "bone": "head",
+            "along": 0.0,
+            "direction": [
+              -0.3,
+              1,
+              -0.5
+            ]
+          },
+          {
+            "bone": "clavicle_l",
+            "along": 0.05,
+            "direction": [
+              1,
+              0.2,
+              0.3
+            ]
+          }
+        ]
+      ],
+      "width": 0.6,
+      "thickness": 0.6,
+      "color": "pink",
+      "drives": [
+        {
+          "role": "sternocleidomastoid",
+          "weight": 1.0
+        }
+      ]
+    },
+    {
+      "name": "Trapezius_l",
+      "strands": [
+        [
+          {
+            "bone": "neck",
+            "along": 0.3,
+            "direction": [
+              -1,
+              0.2,
+              0.0
+            ]
+          },
+          {
+            "bone": "clavicle_l",
+            "along": 0.8,
+            "direction": [
+              -0.5,
+              0,
+              1
+            ]
+          }
+        ],
+        [
+          {
+            "bone": "chest",
+            "along": 0.6,
+            "direction": [
+              -1,
+              0.15,
+              0.0
+            ]
+          },
+          {
+            "bone": "clavicle_l",
+            "along": 0.8,
+            "direction": [
+              -0.5,
+              0,
+              1
+            ]
+          }
+        ],
+        [
+          {
+            "bone": "midspine",
+            "along": 0.3,
+            "direction": [
+              -1,
+              0.1,
+              0.0
+            ]
+          },
+          {
+            "bone": "clavicle_l",
+            "along": 0.8,
+            "direction": [
+              -0.5,
+              0,
+              1
+            ]
+          }
+        ]
+      ],
+      "width": 0.7,
+      "thickness": 0.5,
+      "tendon": 0.3,
+      "color": "dark",
+      "drives": [
+        {
+          "role": "trapezius",
+          "weight": 1.0
+        },
+        {
+          "role": "shoulder",
+          "weight": 0.2
+        }
+      ]
+    },
+    {
+      "name": "Deltoid_l",
+      "strands": [
+        [
+          {
+            "bone": "clavicle_l",
+            "along": 0.8,
+            "direction": [
+              1,
+              0,
+              0.5
+            ]
+          },
+          {
+            "bone": "upperarm_l",
+            "along": 0.4,
+            "direction": [
+              0.3,
+              0,
+              1
+            ]
+          }
+        ],
+        [
+          {
+            "bone": "clavicle_l",
+            "along": 1.0,
+            "direction": [
+              0,
+              0,
+              1
+            ]
+          },
+          {
+            "bone": "upperarm_l",
+            "along": 0.4,
+            "direction": [
+              0,
+              0,
+              1
+            ]
+          }
+        ],
+        [
+          {
+            "bone": "clavicle_l",
+            "along": 0.8,
+            "direction": [
+              -1,
+              0,
+              0.5
+            ]
+          },
+          {
+            "bone": "upperarm_l",
+            "along": 0.4,
+            "direction": [
+              -0.3,
+              0,
+              1
+            ]
+          }
+        ]
+      ],
+      "width": 0.8,
+      "thickness": 0.8,
+      "belly": 0.35,
+      "color": "red",
+      "drives": [
+        {
+          "role": "shoulder",
+          "weight": 1.0
+        }
+      ]
+    },
+    {
+      "name": "Pectoral_l",
+      "strands": [
+        [
+          {
+            "bone": "clavicle_l",
+            "along": 0.4,
+            "direction": [
+              1,
+              0,
+              0.2
+            ]
+          },
+          {
+            "bone": "upperarm_l",
+            "along": 0.12,
+            "direction": [
+              1,
+              0.3,
+              0.0
+            ],
+            "depth": 0.5
+          }
+        ],
+        [
+          {
+            "bone": "chest",
+            "along": 0.4,
+            "direction": [
+              1,
+              0.15,
+              0.0
+            ]
+          },
+          {
+            "bone": "upperarm_l",
+            "along": 0.12,
+            "direction": [
+              1,
+              0.3,
+              0.0
+            ],
+            "depth": 0.5
+          }
+        ],
+        [
+          {
+            "bone": "midspine",
+            "along": 0.6,
+            "direction": [
+              1,
+              0.2,
+              0.0
+            ]
+          },
+          {
+            "bone": "upperarm_l",
+            "along": 0.12,
+            "direction": [
+              1,
+              0.3,
+              0.0
+            ],
+            "depth": 0.5
+          }
+        ]
+      ],
+      "width": 0.7,
+      "thickness": 0.5,
+      "tendon": 0.3,
+      "color": "red",
+      "drives": [
+        {
+          "role": "pectoralis",
+          "weight": 1.0
+        },
+        {
+          "role": "shoulder",
+          "weight": 0.3
+        }
+      ]
+    },
+    {
+      "name": "Latissimus_l",
+      "strands": [
+        [
+          {
+            "bone": "midspine",
+            "along": 0.0,
+            "direction": [
+              -1,
+              0.1,
+              0.0
+            ]
+          },
+          {
+            "bone": "upperarm_l",
+            "along": 0.12,
+            "direction": [
+              -1,
+              -0.3,
+              0.0
+            ],
+            "depth": 0.5
+          }
+        ],
+        [
+          {
+            "bone": "spine_01",
+            "along": 0.5,
+            "direction": [
+              -1,
+              0.2,
+              0.0
+            ]
+          },
+          {
+            "bone": "upperarm_l",
+            "along": 0.12,
+            "direction": [
+              -1,
+              -0.3,
+              0.0
+            ],
+            "depth": 0.5
+          }
+        ]
+      ],
+      "width": 0.7,
+      "thickness": 0.5,
+      "tendon": 0.3,
+      "color": "dark",
+      "drives": [
+        {
+          "role": "latissimus",
+          "weight": 1.0
+        },
+        {
+          "role": "shoulder",
+          "weight": 0.2
+        }
+      ]
+    },
+    {
+      "name": "ErectorSpinae_l",
+      "strands": [
+        [
+          {
+            "bone": "pelvis",
+            "along": 0.5,
+            "direction": [
+              -1,
+              0.25,
+              0.0
+            ]
+          },
+          {
+            "bone": "chest",
+            "along": 0.5,
+            "direction": [
+              -1,
+              0.2,
+              0.0
+            ]
+          }
+        ]
+      ],
+      "width": 0.5,
+      "thickness": 0.6,
+      "belly": 0.4,
+      "color": "dark",
+      "drives": []
+    },
+    {
+      "name": "RectusAbdominis_l",
+      "strands": [
+        [
+          {
+            "bone": "pelvis",
+            "along": 0.2,
+            "direction": [
+              1,
+              0.25,
+              0.0
+            ]
+          },
+          {
+            "bone": "chest",
+            "along": 0.0,
+            "direction": [
+              1,
+              0.3,
+              0.0
+            ]
+          }
+        ]
+      ],
+      "width": 0.5,
+      "thickness": 0.4,
+      "tendon": 0.5,
+      "color": "pink",
+      "drives": [
+        {
+          "role": "abdominals",
+          "weight": 1.0
+        }
+      ]
+    },
+    {
+      "name": "Oblique_l",
+      "strands": [
+        [
+          {
+            "bone": "pelvis",
+            "along": 0.8,
+            "direction": [
+              0.3,
+              1,
+              0.0
+            ]
+          },
+          {
+            "bone": "midspine",
+            "along": 0.5,
+            "direction": [
+              0.6,
+              1,
+              0.0
+            ]
+          }
+        ]
+      ],
+      "width": 0.6,
+      "thickness": 0.5,
+      "tendon": 0.4,
+      "color": "pink",
+      "drives": [
+        {
+          "role": "oblique",
+          "weight": 1.0
+        },
+        {
+          "role": "abdominals",
+          "weight": 0.2
+        }
+      ]
+    },
+    {
+      "name": "Biceps_l",
+      "strands": [
+        [
+          {
+            "bone": "upperarm_l",
+            "along": 0.15,
+            "direction": [
+              1,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "bone": "lowerarm_l",
+            "along": 0.1,
+            "direction": [
+              1,
+              0.0,
+              0.0
+            ]
+          }
+        ]
+      ],
+      "width": 0.8,
+      "thickness": 0.8,
+      "color": "red",
+      "drives": [
+        {
+          "role": "bicep",
+          "weight": 1.0
+        },
+        {
+          "role": "elbow",
+          "weight": 0.25
+        }
+      ]
+    },
+    {
+      "name": "Triceps_l",
+      "strands": [
+        [
+          {
+            "bone": "upperarm_l",
+            "along": 0.1,
+            "direction": [
+              -1,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "bone": "lowerarm_l",
+            "along": 0.0,
+            "direction": [
+              -1,
+              0.0,
+              0.0
+            ]
+          }
+        ]
+      ],
+      "width": 0.8,
+      "thickness": 0.8,
+      "color": "dark",
+      "drives": [
+        {
+          "role": "tricep",
+          "weight": 1.0
+        },
+        {
+          "role": "elbow",
+          "weight": 0.25
+        }
+      ]
+    },
+    {
+      "name": "ForearmFlexors_l",
+      "strands": [
+        [
+          {
+            "bone": "lowerarm_l",
+            "along": 0.05,
+            "direction": [
+              0.3,
+              0,
+              -1
+            ]
+          },
+          {
+            "bone": "hand_l",
+            "along": 0.0,
+            "direction": [
+              0,
+              0,
+              -1
+            ]
+          }
+        ]
+      ],
+      "width": 0.8,
+      "thickness": 0.7,
+      "belly": 0.3,
+      "color": "pink",
+      "drives": [
+        {
+          "role": "forearm",
+          "weight": 1.0
+        },
+        {
+          "role": "wrist",
+          "weight": 0.3
+        },
+        {
+          "role": "elbow",
+          "weight": 0.15
+        }
+      ]
+    },
+    {
+      "name": "ForearmExtensors_l",
+      "strands": [
+        [
+          {
+            "bone": "lowerarm_l",
+            "along": 0.05,
+            "direction": [
+              0.3,
+              0,
+              1
+            ]
+          },
+          {
+            "bone": "hand_l",
+            "along": 0.0,
+            "direction": [
+              0,
+              0,
+              1
+            ]
+          }
+        ]
+      ],
+      "width": 0.8,
+      "thickness": 0.7,
+      "belly": 0.3,
+      "color": "pink",
+      "drives": [
+        {
+          "role": "forearm",
+          "weight": 0.6
+        },
+        {
+          "role": "wrist",
+          "weight": 0.3
+        }
+      ]
+    },
+    {
+      "name": "Gluteus_l",
+      "strands": [
+        [
+          {
+            "bone": "pelvis",
+            "along": 0.5,
+            "direction": [
+              -1,
+              0.5,
+              0.0
+            ]
+          },
+          {
+            "bone": "thigh_l",
+            "along": 0.2,
+            "direction": [
+              -1,
+              0.5,
+              0.0
+            ]
+          }
+        ]
+      ],
+      "hooks": [
+        {
+          "bone": "spine_01",
+          "along": 0.0,
+          "direction": [
+            -1,
+            0.3,
+            0.0
+          ]
+        },
+        {
+          "bone": "thigh_l",
+          "along": 0.05,
+          "direction": [
+            0,
+            1,
+            0.0
+          ]
+        }
+      ],
+      "width": 0.85,
+      "thickness": 0.75,
+      "belly": 0.5,
+      "tendon": 0.5,
+      "color": "red",
+      "drives": [
+        {
+          "role": "gluteus",
+          "weight": 1.0
+        }
+      ]
+    },
+    {
+      "name": "Quadriceps_l",
+      "strands": [
+        [
+          {
+            "bone": "thigh_l",
+            "along": 0.05,
+            "direction": [
+              1,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "bone": "calf_l",
+            "along": 0.0,
+            "direction": [
+              1,
+              0.0,
+              0.0
+            ],
+            "depth": 0.5
+          }
+        ],
+        [
+          {
+            "bone": "thigh_l",
+            "along": 0.15,
+            "direction": [
+              0.6,
+              1,
+              0.0
+            ]
+          },
+          {
+            "bone": "calf_l",
+            "along": 0.0,
+            "direction": [
+              1,
+              0.0,
+              0.0
+            ],
+            "depth": 0.5
+          }
+        ],
+        [
+          {
+            "bone": "thigh_l",
+            "along": 0.2,
+            "direction": [
+              0.6,
+              -1,
+              0.0
+            ]
+          },
+          {
+            "bone": "calf_l",
+            "along": 0.0,
+            "direction": [
+              1,
+              0.0,
+              0.0
+            ],
+            "depth": 0.5
+          }
+        ]
+      ],
+      "width": 0.7,
+      "thickness": 0.7,
+      "belly": 0.55,
+      "color": "red",
+      "drives": [
+        {
+          "role": "quadriceps",
+          "weight": 1.0
+        },
+        {
+          "role": "knee",
+          "weight": 0.4
+        }
+      ]
+    },
+    {
+      "name": "Hamstrings_l",
+      "strands": [
+        [
+          {
+            "bone": "pelvis",
+            "along": 0.0,
+            "direction": [
+              -1,
+              0.5,
+              0.0
+            ]
+          },
+          {
+            "bone": "calf_l",
+            "along": 0.05,
+            "direction": [
+              -1,
+              0.0,
+              0.0
+            ],
+            "depth": 0.5
+          }
+        ],
+        [
+          {
+            "bone": "pelvis",
+            "along": 0.0,
+            "direction": [
+              -1,
+              0.3,
+              0.0
+            ]
+          },
+          {
+            "bone": "calf_l",
+            "along": 0.05,
+            "direction": [
+              -1,
+              0.0,
+              0.0
+            ],
+            "depth": 0.5
+          }
+        ]
+      ],
+      "width": 0.7,
+      "thickness": 0.7,
+      "color": "dark",
+      "drives": [
+        {
+          "role": "hamstring",
+          "weight": 1.0
+        },
+        {
+          "role": "knee",
+          "weight": 0.3
+        }
+      ]
+    },
+    {
+      "name": "Adductors_l",
+      "strands": [
+        [
+          {
+            "bone": "pelvis",
+            "along": 0.0,
+            "direction": [
+              0.5,
+              0.3,
+              -1
+            ]
+          },
+          {
+            "bone": "thigh_l",
+            "along": 0.6,
+            "direction": [
+              0,
+              -1,
+              0.0
+            ]
+          }
+        ]
+      ],
+      "width": 0.7,
+      "thickness": 0.6,
+      "color": "pink",
+      "drives": [
+        {
+          "role": "adductor",
+          "weight": 1.0
+        }
+      ]
+    },
+    {
+      "name": "Gastrocnemius_l",
+      "strands": [
+        [
+          {
+            "bone": "calf_l",
+            "along": 0.05,
+            "direction": [
+              -1,
+              0.4,
+              0.0
+            ]
+          },
+          {
+            "bone": "foot_l",
+            "along": 0.0,
+            "direction": [
+              -1,
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        [
+          {
+            "bone": "calf_l",
+            "along": 0.05,
+            "direction": [
+              -1,
+              -0.4,
+              0.0
+            ]
+          },
+          {
+            "bone": "foot_l",
+            "along": 0.0,
+            "direction": [
+              -1,
+              0.0,
+              0.0
+            ]
+          }
+        ]
+      ],
+      "width": 0.75,
+      "thickness": 0.75,
+      "belly": 0.3,
+      "color": "red",
+      "drives": [
+        {
+          "role": "gastrocnemius",
+          "weight": 1.0
+        },
+        {
+          "role": "achilles_tendon",
+          "weight": 0.5
+        },
+        {
+          "role": "knee",
+          "weight": 0.15
+        }
+      ]
+    },
+    {
+      "name": "Tibialis_l",
+      "strands": [
+        [
+          {
+            "bone": "calf_l",
+            "along": 0.1,
+            "direction": [
+              1,
+              0.3,
+              0.0
+            ]
+          },
+          {
+            "bone": "foot_l",
+            "along": 0.0,
+            "direction": [
+              1,
+              0.0,
+              0.0
+            ]
+          }
+        ]
+      ],
+      "width": 0.5,
+      "thickness": 0.5,
+      "color": "pink",
+      "drives": [
+        {
+          "role": "tibialis",
+          "weight": 1.0
+        },
+        {
+          "role": "ankle",
+          "weight": 0.3
+        }
+      ]
+    }
+  ]
+}

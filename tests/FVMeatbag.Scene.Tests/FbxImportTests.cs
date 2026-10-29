@@ -80,7 +80,7 @@ public sealed class FbxImportTests : IDisposable
 
         Assert.All(fbx.Geometry.Skin.Value.ToArray(), w =>
         {
-            var total = w.Weights.X + w.Weights.Y + w.Weights.Z + w.Weights.W;
+            var total = w.TotalWeight;
             Assert.True(MathF.Abs(total - 1f) < 1e-4f, $"Weights add up to {total}.");
         });
         foreach (var (name, center) in gltfCenters)
@@ -94,7 +94,7 @@ public sealed class FbxImportTests : IDisposable
     public void Mesh_importer_picks_the_reader_by_extension()
     {
         Assert.Equal(56, MeshImporter.Load(FixturePath("MaleBaseMesh.zup-scale-all.fbx")).Skeleton.Value.Count);
-        Assert.Equal(56, MeshImporter.Load(SkeletonImportTests.SamplePath("Demo", "Meshes", "MaleBaseMesh.glb")).Skeleton.Value.Count);
+        Assert.Equal(56, MeshImporter.Load(FixturePath("MaleBaseMesh.glb")).Skeleton.Value.Count);
         Assert.True(MeshImporter.IsSupported("Hero.FBX"));
         Assert.Throws<NotSupportedException>(() => MeshImporter.Load(_temp.Combine("Hero.obj")));
     }
@@ -108,9 +108,9 @@ public sealed class FbxImportTests : IDisposable
         Assert.Throws<InvalidDataException>(() => FbxImporter.Load(broken));
     }
 
-    private static LoadedMesh Original() => GltfImporter.Load(SkeletonImportTests.SamplePath("Demo", "Meshes", "MaleBaseMesh.glb"));
+    private static LoadedMesh Original() => GltfImporter.Load(FixturePath("MaleBaseMesh.glb"));
 
-    private static string FixturePath(string file) => Path.Combine(AppContext.BaseDirectory, "Fixtures", file);
+    internal static string FixturePath(string file) => Path.Combine(AppContext.BaseDirectory, "Fixtures", file);
 
     /// <summary>Weighted average position of the vertices each bone moves, by bone name.</summary>
     private static Dictionary<string, Vector3> WeightedCenters(LoadedMesh mesh)

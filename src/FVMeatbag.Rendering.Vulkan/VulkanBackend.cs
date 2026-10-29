@@ -14,8 +14,10 @@ namespace FVMeatbag.Rendering.Vulkan;
 /// <remarks>
 /// Shading is untextured "clay": one directional light plus a hemisphere ambient. The wireframe
 /// display modes draw the same meshes again with polygon mode Line (needs the
-/// <c>fillModeNonSolid</c> feature; without it they fall back to solid). Overlay lines (bones)
-/// are drawn last, without depth testing, so they show through the mesh. Frames are
+/// <c>fillModeNonSolid</c> feature; without it they fall back to solid). See-through overlay meshes
+/// (muscles) come next, in two passes: depth only, then color blended where each overlay is nearest,
+/// so every pixel blends once. Overlay lines (bones) are drawn last, without depth testing, so they
+/// show through the mesh. Frames are
 /// rendered synchronously (submit, then wait), which keeps resource lifetimes trivial while the
 /// renderer is small.
 /// </remarks>
@@ -49,6 +51,10 @@ public sealed unsafe class VulkanBackend : IRenderBackend
     private Pipeline _linePipeline;
     private PipelineLayout _wirePipelineLayout;
     private Pipeline _wirePipeline;
+    private PipelineLayout _overlayDepthPipelineLayout;
+    private Pipeline _overlayDepthPipeline;
+    private PipelineLayout _overlayPipelineLayout;
+    private Pipeline _overlayPipeline;
     private HostBuffer? _lineVertices;
     private RenderTarget? _target;
 
@@ -92,6 +98,12 @@ public sealed unsafe class VulkanBackend : IRenderBackend
                 "clay", PrimitiveTopology.TriangleList, depthTest: true, (uint)sizeof(PushConstants), ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit);
             (_linePipelineLayout, _linePipeline) = CreatePipeline(
                 "line", PrimitiveTopology.LineList, depthTest: false, (uint)sizeof(LinePushConstants), ShaderStageFlags.VertexBit);
+            (_overlayDepthPipelineLayout, _overlayDepthPipeline) = CreatePipeline(
+                "tint", PrimitiveTopology.TriangleList, depthTest: true, (uint)sizeof(TintPushConstants), ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit,
+                colorWrite: false);
+            (_overlayPipelineLayout, _overlayPipeline) = CreatePipeline(
+                "tint", PrimitiveTopology.TriangleList, depthTest: true, (uint)sizeof(TintPushConstants), ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit,
+                depthWrite: false, compare: CompareOp.LessOrEqual, blend: true);
             if (SupportsWireframe)
             {
                 // Tested against the solid pass but not written, so wireframe-only shows hidden edges
@@ -121,9 +133,10 @@ public sealed unsafe class VulkanBackend : IRenderBackend
         _target = width == 0 || height == 0 ? null : new RenderTarget(this, width, height);
     }
 
-    public void RenderFrame(in FrameContext frame, IReadOnlyList<MeshDraw> draws, IReadOnlyList<LineSegment> lines)
+    public void RenderFrame(in FrameContext frame, IReadOnlyList<MeshDraw> draws, IReadOnlyList<OverlayDraw> overlays, IReadOnlyList<LineSegment> lines)
     {
         ArgumentNullException.ThrowIfNull(draws);
+        ArgumentNullException.ThrowIfNull(overlays);
         ArgumentNullException.ThrowIfNull(lines);
         var vk = Api;
         Resize(frame.Width, frame.Height);
@@ -137,6 +150,11 @@ public sealed unsafe class VulkanBackend : IRenderBackend
         {
             used.Add(draw.Mesh.Id);
             Upload(draw.Mesh);
+        }
+        foreach (var overlay in overlays)
+        {
+            used.Add(overlay.Mesh.Id);
+            Upload(overlay.Mesh);
         }
 
         Check(vk.ResetCommandBuffer(_commandBuffer, 0), "vkResetCommandBuffer");
@@ -175,6 +193,7 @@ public sealed unsafe class VulkanBackend : IRenderBackend
         {
             DrawWire(draws, viewProjection, solid ? WireOnSolidColor : WireColor);
         }
+        DrawOverlays(frame, overlays, viewProjection, target);
         DrawLines(lines, viewProjection);
         vk.CmdEndRenderPass(_commandBuffer);
 
@@ -262,6 +281,54 @@ public sealed unsafe class VulkanBackend : IRenderBackend
         }
     }
 
+    /// <summary>
+    /// Draws the see-through overlays: a depth-only pass, then a blended color pass that keeps only
+    /// the nearest overlay surface per pixel. On top, the depth buffer is cleared first so the
+    /// meshes drawn so far do not hide them.
+    /// </summary>
+    private void DrawOverlays(in FrameContext frame, IReadOnlyList<OverlayDraw> overlays, Matrix4x4 viewProjection, RenderTarget target)
+    {
+        if (overlays.Count == 0)
+        {
+            return;
+        }
+        var vk = Api;
+        if (frame.OverlaysOnTop)
+        {
+            var clear = new ClearAttachment
+            {
+                AspectMask = ImageAspectFlags.DepthBit,
+                ClearValue = new ClearValue(depthStencil: new ClearDepthStencilValue(1f, 0)),
+            };
+            var rect = new ClearRect(new Rect2D(new Offset2D(0, 0), new Extent2D(target.Width, target.Height)), 0, 1);
+            vk.CmdClearAttachments(_commandBuffer, 1, in clear, 1, in rect);
+        }
+        foreach (var (pipeline, layout) in (ReadOnlySpan<(Pipeline, PipelineLayout)>)[(_overlayDepthPipeline, _overlayDepthPipelineLayout), (_overlayPipeline, _overlayPipelineLayout)])
+        {
+            vk.CmdBindPipeline(_commandBuffer, PipelineBindPoint.Graphics, pipeline);
+            foreach (var overlay in overlays)
+            {
+                var mesh = _meshes[overlay.Mesh.Id];
+                if (mesh.IndexCount == 0)
+                {
+                    continue;
+                }
+                var normal = Matrix4x4.Invert(overlay.World, out var inverse) ? Matrix4x4.Transpose(inverse) : Matrix4x4.Identity;
+                var toLight = frame.DirectionToLight;
+                var push = new TintPushConstants
+                {
+                    WorldViewProjection = overlay.World * viewProjection,
+                    NormalRow0 = new Vector4(normal.M11, normal.M12, normal.M13, toLight.X),
+                    NormalRow1 = new Vector4(normal.M21, normal.M22, normal.M23, toLight.Y),
+                    NormalRow2 = new Vector4(normal.M31, normal.M32, normal.M33, toLight.Z),
+                    Color = overlay.Color,
+                };
+                vk.CmdPushConstants(_commandBuffer, layout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit, 0, (uint)sizeof(TintPushConstants), &push);
+                DrawMesh(mesh);
+            }
+        }
+    }
+
     private void DrawMesh(GpuMesh mesh)
     {
         var vk = Api;
@@ -305,6 +372,10 @@ public sealed unsafe class VulkanBackend : IRenderBackend
             _target = null;
             _lineVertices?.Dispose();
             _lineVertices = null;
+            vk.DestroyPipeline(_device, _overlayPipeline, null);
+            vk.DestroyPipelineLayout(_device, _overlayPipelineLayout, null);
+            vk.DestroyPipeline(_device, _overlayDepthPipeline, null);
+            vk.DestroyPipelineLayout(_device, _overlayDepthPipelineLayout, null);
             vk.DestroyPipeline(_device, _wirePipeline, null);
             vk.DestroyPipelineLayout(_device, _wirePipelineLayout, null);
             vk.DestroyPipeline(_device, _linePipeline, null);
@@ -616,7 +687,10 @@ public sealed unsafe class VulkanBackend : IRenderBackend
         ShaderStageFlags pushConstantStages,
         PolygonMode polygonMode = PolygonMode.Fill,
         bool? depthWrite = null,
-        bool depthBias = false)
+        bool depthBias = false,
+        CompareOp? compare = null,
+        bool blend = false,
+        bool colorWrite = true)
     {
         var vk = Api;
         var pushRange = new PushConstantRange(pushConstantStages, 0, pushConstantSize);
@@ -694,11 +768,20 @@ public sealed unsafe class VulkanBackend : IRenderBackend
                 SType = StructureType.PipelineDepthStencilStateCreateInfo,
                 DepthTestEnable = depthTest,
                 DepthWriteEnable = depthWrite ?? depthTest,
-                DepthCompareOp = depthBias ? CompareOp.LessOrEqual : CompareOp.Less,
+                DepthCompareOp = compare ?? (depthBias ? CompareOp.LessOrEqual : CompareOp.Less),
             };
             var blendAttachment = new PipelineColorBlendAttachmentState
             {
-                ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit | ColorComponentFlags.ABit,
+                ColorWriteMask = colorWrite
+                    ? ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit | ColorComponentFlags.ABit
+                    : 0,
+                BlendEnable = blend,
+                SrcColorBlendFactor = BlendFactor.SrcAlpha,
+                DstColorBlendFactor = BlendFactor.OneMinusSrcAlpha,
+                ColorBlendOp = BlendOp.Add,
+                SrcAlphaBlendFactor = BlendFactor.One,
+                DstAlphaBlendFactor = BlendFactor.OneMinusSrcAlpha,
+                AlphaBlendOp = BlendOp.Add,
             };
             var colorBlend = new PipelineColorBlendStateCreateInfo
             {
@@ -834,6 +917,17 @@ public sealed unsafe class VulkanBackend : IRenderBackend
     private struct WirePushConstants
     {
         public Matrix4x4 WorldViewProjection;
+        public Vector4 Color;
+    }
+
+    /// <summary>Must match the push_constant block in Shaders/tint.vert and tint.frag.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct TintPushConstants
+    {
+        public Matrix4x4 WorldViewProjection;
+        public Vector4 NormalRow0;
+        public Vector4 NormalRow1;
+        public Vector4 NormalRow2;
         public Vector4 Color;
     }
 

@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FVMeatbag.Core.Import;
 using FVMeatbag.Core.Project;
+using FVMeatbag.Core.Rig;
 using FVMeatbag.Graph;
 using FVMeatbag.Scene;
 using FVMeatbag.Scene.Components;
@@ -105,14 +106,18 @@ public sealed class MeshDetailsViewModel(SceneRoot scene, MeshComponent mesh) : 
 /// </summary>
 public sealed partial class SkeletonDetailsViewModel : DetailsViewModel, IDisposable
 {
+    private static readonly CorrectiveRoleCatalog Catalog = CorrectiveRoleCatalog.Default;
+
     private readonly SkeletonComponent _skeleton;
+    private readonly Maybe<SkeletalMeshAsset> _asset;
     private readonly BoneNodeViewModel[] _nodes;
     private bool _syncing;
 
-    public SkeletonDetailsViewModel(SkeletonComponent skeleton)
+    public SkeletonDetailsViewModel(SkeletonComponent skeleton, Maybe<SkeletalMeshAsset> asset = default)
     {
         ArgumentNullException.ThrowIfNull(skeleton);
         _skeleton = skeleton;
+        _asset = asset;
         var bones = skeleton.Skeleton.Bones;
         _nodes = [.. bones.Select((b, i) => new BoneNodeViewModel(b.Name, i))];
         for (var i = 0; i < bones.Count; i++)
@@ -127,9 +132,19 @@ public sealed partial class SkeletonDetailsViewModel : DetailsViewModel, IDispos
             }
         }
         UpdateBoneColors();
+        UpdateBadges();
         SyncFromSkeleton();
         skeleton.SelectedBoneChanged += OnSelectedBoneChanged;
         skeleton.Pose.Changed += OnPoseChanged;
+        skeleton.Skeleton.Renamed += OnRenamed;
+        if (skeleton.RigCheckNode is { } check)
+        {
+            check.OutputsChanged += OnRigChecked;
+        }
+        if (asset.TryGetValue(out var a))
+        {
+            a.Correctives.Changed += OnCorrectivesChanged;
+        }
     }
 
     public override string Title => $"Skeleton of {_skeleton.Parent?.Name}";
@@ -187,13 +202,155 @@ public sealed partial class SkeletonDetailsViewModel : DetailsViewModel, IDispos
             // Like Maya's joint orient, the rest rotation is factored out so a bone at rest reads 0, 0, 0
             // and turning it about its own Z changes only Z: local = delta, then rest (row vectors).
             var rotate = BoneTransform.EulerDegrees(Quaternion.Concatenate(pose.Rotation, Quaternion.Inverse(rest.Rotation)));
-            return $"{bone.Name}\nParent: {parent}\nChildren: {children}\nSide: {BoneDisplayOperation.SideOf(bone.Name)}\n"
+            return $"{bone.Name}\nParent: {parent}\nChildren: {children}\nSide: {BoneNames.SideOf(bone.Name)}\n"
                 + $"Translate {Format(pose.Translation)}\nRotate {Format(rotate, 1)}°\nScale {Format(pose.Scale)}"
                 + (_skeleton.Pose.IsPosed(index) ? "\nPosed" : "\nAt rest");
         },
         () => "No bone selected. Click a joint in the viewport or a bone in the tree.");
 
     public bool IsPosed => !_skeleton.Pose.IsRest;
+
+    private Maybe<MannyCheck> Check => Maybe.From(_skeleton.RigCheckNode).Bind(n => n.OutputValues.Check);
+
+    private Maybe<MannyRig> Rig => Check.Bind(c => c.Rig).Where(r => r.SkeletonVersion == _skeleton.Skeleton.Version);
+
+    /// <summary>Whether the skeleton follows the UE5 Manny contract.</summary>
+    public string RigSummary => Check.Match(c => c.Summary, () => "Checking the skeleton…");
+
+    public bool HasRigProblems => Check.Match(c => !c.IsConformant, () => false);
+
+    /// <summary>What breaks the Manny contract, a few lines at most.</summary>
+    public string RigProblems => Check.Match(
+        c => string.Join('\n', c.Problems.Take(8).Select(p => "• " + p.Message))
+            + (c.Problems.Count > 8 ? $"\n…and {c.Problems.Count - 8} more" : ""),
+        () => "");
+
+    /// <summary>Corrective roles need a Manny skeleton and a mesh asset to store them on.</summary>
+    public bool CanEditCorrectives => Rig.HasValue && _asset.HasValue;
+
+    /// <summary>Feedback from the last corrective or rename action.</summary>
+    [ObservableProperty]
+    private string _correctiveStatus = "";
+
+    /// <summary>Text box contents for renaming the selected bone.</summary>
+    [ObservableProperty]
+    private string _boneNameEdit = "";
+
+    public bool HasSelectedBone => _skeleton.SelectedBone.HasValue;
+
+    /// <summary>True when the selected bone is an extra (not part of the Manny body) of a Manny skeleton.</summary>
+    public bool IsSelectedExtra => CanEditCorrectives && SelectedExtra.HasValue;
+
+    public string SelectedBoneKind => Rig.Match(
+        rig => _skeleton.SelectedBone.Match(
+            bone => rig.IsExtra(bone)
+                ? $"Extra bone, follows {_skeleton.Skeleton.Bones[rig.DriverOf(bone)].Name}"
+                : "Core UE5 Manny bone",
+            () => ""),
+        () => "");
+
+    /// <summary>Choices for <see cref="RoleIndex"/>: "(none)", then the catalog's roles.</summary>
+    public IReadOnlyList<string> RoleChoices { get; } = [.. Catalog.Roles.Select(r => r.Name).Prepend("(none)")];
+
+    public int RoleIndex
+    {
+        get => Binding.Tag.Bind(t => Catalog.Roles.Select((r, i) => (r, i)).FirstOrNone(x => x.r.Id == t.Role)).Match(x => x.i + 1, () => 0);
+        set
+        {
+            if (value < 0 || !SelectedExtraName.TryGetValue(out var name))
+            {
+                return;
+            }
+            if (value == 0)
+            {
+                Correctives.Tag(name, Maybe<CorrectiveTag>.None);
+                return;
+            }
+            var role = Catalog.Roles[value - 1];
+            var side = role.Sided ? Binding.Tag.Match(t => t.Side, () => BoneNames.SideOf(name)) : BoneSide.Center;
+            Correctives.Tag(name, new CorrectiveTag(role.Id, side, Binding.Tag.Bind(t => t.Part)));
+        }
+    }
+
+    /// <summary>Choices for <see cref="SideIndex"/>, in <see cref="BoneSide"/> order.</summary>
+    public IReadOnlyList<string> SideChoices { get; } = ["Center", "Left", "Right"];
+
+    public int SideIndex
+    {
+        get => Binding.Tag.Match(t => (int)t.Side, () => -1);
+        set => EditTag(t => t with { Side = (BoneSide)value }, value >= 0);
+    }
+
+    /// <summary>Optional part of the role (hi, lo, inner); empty for none.</summary>
+    public string Part
+    {
+        get => Binding.Tag.Bind(t => t.Part).OrDefault("");
+        set => EditTag(t => t with { Part = string.IsNullOrWhiteSpace(value) ? Maybe<string>.None : value.Trim() }, true);
+    }
+
+    public bool HasRole => Binding.Tag.HasValue;
+
+    /// <summary>Choices for <see cref="ModeIndex"/>, in <see cref="CorrectiveMode"/> order.</summary>
+    public IReadOnlyList<string> ModeChoices { get; } = ["Solve", "Lock", "Ignore"];
+
+    public int ModeIndex
+    {
+        get => (int)Binding.Mode;
+        set
+        {
+            if (value >= 0 && SelectedExtraName.TryGetValue(out var name))
+            {
+                Correctives.SetMode(name, (CorrectiveMode)value);
+            }
+        }
+    }
+
+    private Maybe<int> SelectedExtra => Rig.Bind(rig => _skeleton.SelectedBone.Where(rig.IsExtra));
+
+    private Maybe<string> SelectedExtraName => SelectedExtra.Map(b => _skeleton.Skeleton.Bones[b].Name);
+
+    private CorrectiveSetup Correctives => _asset.Value.Correctives;
+
+    private CorrectiveBinding Binding => SelectedExtraName.Match(n => Correctives[n], () => CorrectiveBinding.Default);
+
+    /// <summary>Tags every untagged extra whose name says what it is (bicep_l, quad_upper_r, ...).</summary>
+    [RelayCommand]
+    private void SuggestRoles()
+    {
+        if (!CanEditCorrectives)
+        {
+            return;
+        }
+        var tagged = Correctives.SuggestAll(Rig.Value, Catalog);
+        var untagged = Rig.Value.Extras.Count(b => Correctives[_skeleton.Skeleton.Bones[b].Name].Tag.IsNone);
+        CorrectiveStatus = $"Tagged {tagged} bone{(tagged == 1 ? "" : "s")} from their names; {untagged} extra{(untagged == 1 ? "" : "s")} without a role.";
+    }
+
+    /// <summary>Copies the selected bone's role and mode to its other-side twin.</summary>
+    [RelayCommand]
+    private void MirrorCorrective()
+    {
+        if (!SelectedExtra.TryGetValue(out var bone))
+        {
+            return;
+        }
+        CorrectiveStatus = Correctives.Mirror(Rig.Value, bone).Match(
+            other => $"Copied to {_skeleton.Skeleton.Bones[other].Name}.",
+            () => $"No extra bone named {BoneNames.Mirror(_skeleton.Skeleton.Bones[bone].Name)} to mirror to.");
+    }
+
+    [RelayCommand]
+    private void RenameBone()
+    {
+        if (!_skeleton.SelectedBone.TryGetValue(out var bone) || !_asset.TryGetValue(out var asset) || string.IsNullOrWhiteSpace(BoneNameEdit))
+        {
+            return;
+        }
+        var old = _skeleton.Skeleton.Bones[bone].Name;
+        CorrectiveStatus = asset.RenameBone(bone, BoneNameEdit)
+            ? $"Renamed {old} to {_skeleton.Skeleton.Bones[bone].Name}."
+            : $"Another bone is already named {BoneNameEdit.Trim()}.";
+    }
 
     [RelayCommand]
     private void ClearSelection() => _skeleton.SelectedBone = Maybe<int>.None;
@@ -219,6 +376,15 @@ public sealed partial class SkeletonDetailsViewModel : DetailsViewModel, IDispos
     {
         _skeleton.SelectedBoneChanged -= OnSelectedBoneChanged;
         _skeleton.Pose.Changed -= OnPoseChanged;
+        _skeleton.Skeleton.Renamed -= OnRenamed;
+        if (_skeleton.RigCheckNode is { } check)
+        {
+            check.OutputsChanged -= OnRigChecked;
+        }
+        if (_asset.TryGetValue(out var asset))
+        {
+            asset.Correctives.Changed -= OnCorrectivesChanged;
+        }
     }
 
     partial void OnSelectedBoneChanged(BoneNodeViewModel? value)
@@ -230,6 +396,63 @@ public sealed partial class SkeletonDetailsViewModel : DetailsViewModel, IDispos
     }
 
     private void OnSelectedBoneChanged(object? sender, EventArgs e) => SyncFromSkeleton();
+
+    private void OnRenamed(object? sender, EventArgs e)
+    {
+        foreach (var node in _nodes)
+        {
+            node.Name = _skeleton.Skeleton.Bones[node.Index].Name;
+        }
+        UpdateBoneColors();
+        BoneNameEdit = _skeleton.SelectedBone.Match(b => _skeleton.Skeleton.Bones[b].Name, () => "");
+        OnPropertyChanged(nameof(SelectedBoneInfo));
+    }
+
+    private void OnRigChecked(object? sender, OutputsChangedEventArgs e)
+    {
+        UpdateBadges();
+        OnCorrectiveStateChanged();
+    }
+
+    private void OnCorrectivesChanged(object? sender, EventArgs e)
+    {
+        UpdateBadges();
+        OnCorrectiveStateChanged();
+    }
+
+    private void OnCorrectiveStateChanged()
+    {
+        foreach (var name in (ReadOnlySpan<string>)[nameof(RigSummary), nameof(HasRigProblems), nameof(RigProblems), nameof(CanEditCorrectives),
+            nameof(IsSelectedExtra), nameof(SelectedBoneKind), nameof(RoleIndex), nameof(SideIndex), nameof(Part), nameof(HasRole), nameof(ModeIndex)])
+        {
+            OnPropertyChanged(name);
+        }
+    }
+
+    /// <summary>Shows each extra's role (or mode) next to its name in the tree.</summary>
+    private void UpdateBadges()
+    {
+        var rig = Rig;
+        foreach (var node in _nodes)
+        {
+            node.Badge = rig.Where(r => r.IsExtra(node.Index) && _asset.HasValue).Match(
+                _ =>
+                {
+                    var binding = Correctives[node.Name];
+                    return binding.Mode == CorrectiveMode.Ignore ? "ignored"
+                        : binding.Tag.Match(t => t.CanonicalName + (binding.Mode == CorrectiveMode.Lock ? " (locked)" : ""), () => "no role");
+                },
+                () => "");
+        }
+    }
+
+    private void EditTag(Func<CorrectiveTag, CorrectiveTag> edit, bool valid)
+    {
+        if (valid && SelectedExtraName.TryGetValue(out var name) && Correctives[name].Tag.TryGetValue(out var tag))
+        {
+            Correctives.Tag(name, edit(tag));
+        }
+    }
 
     private void OnPoseChanged(object? sender, EventArgs e)
     {
@@ -273,7 +496,11 @@ public sealed partial class SkeletonDetailsViewModel : DetailsViewModel, IDispos
         {
             _syncing = false;
         }
+        BoneNameEdit = _skeleton.SelectedBone.Match(b => _skeleton.Skeleton.Bones[b].Name, () => "");
+        CorrectiveStatus = "";
         OnPropertyChanged(nameof(SelectedBoneInfo));
+        OnPropertyChanged(nameof(HasSelectedBone));
+        OnCorrectiveStateChanged();
     }
 
     private void UpdateBoneColors()
@@ -289,7 +516,12 @@ public sealed partial class SkeletonDetailsViewModel : DetailsViewModel, IDispos
 /// <summary>One bone in the details tree.</summary>
 public sealed partial class BoneNodeViewModel(string name, int index) : ViewModelBase
 {
-    public string Name { get; } = name;
+    [ObservableProperty]
+    private string _name = name;
+
+    /// <summary>The corrective role (or mode) of an extra bone; empty for core bones.</summary>
+    [ObservableProperty]
+    private string _badge = "";
 
     public int Index { get; } = index;
 

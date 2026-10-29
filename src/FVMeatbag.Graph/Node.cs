@@ -12,6 +12,12 @@ public enum NodeState
 
     /// <summary>The last evaluation threw. Outputs keep their previous values and nothing downstream ran.</summary>
     Faulted,
+
+    /// <summary>
+    /// An <see cref="AsyncOperation{TIn,TOut}"/> is working. Outputs keep their previous values until
+    /// it completes; see <see cref="Node.Progress"/>.
+    /// </summary>
+    Running,
 }
 
 /// <summary>
@@ -40,6 +46,9 @@ public abstract class Node
     public abstract IReadOnlyList<OutputPort> Outputs { get; }
     public abstract IReadOnlyList<ExecInput> ExecInputs { get; }
     public abstract IReadOnlyList<ExecOutput> ExecOutputs { get; }
+
+    /// <summary>Progress of the async work in flight, 0 to 1; None when nothing is running.</summary>
+    public virtual Maybe<float> Progress => Maybe<float>.None;
 
     /// <summary>Action nodes run only when triggered through an exec input, never on data changes.</summary>
     public bool IsAction => ExecInputs.Count > 0 || ExecOutputs.Count > 0;
@@ -82,6 +91,17 @@ public abstract class Node
     /// <summary>Pulls connected inputs, runs the operation and returns the indices of outputs that changed.</summary>
     internal abstract IReadOnlyList<int> Evaluate(EvaluationContext context);
 
+    /// <summary>Cancels async work in flight. The node faults with an <see cref="OperationCanceledException"/>.</summary>
+    public virtual void Cancel()
+    {
+    }
+
+    /// <summary>
+    /// Applies the result of async work started by <see cref="Evaluate"/>, on the evaluator's thread.
+    /// Returns None when the work was superseded or the node removed.
+    /// </summary>
+    internal virtual Maybe<AsyncCompletion> CompleteAsync(object job) => Maybe<AsyncCompletion>.None;
+
     internal void RaiseOutputsChanged(IReadOnlyList<OutputPort> changed) =>
         OutputsChanged?.Invoke(this, new OutputsChangedEventArgs(changed));
 
@@ -89,6 +109,9 @@ public abstract class Node
 
     private KeyNotFoundException Missing(string kind, string name) => new($"{Name} has no {kind} '{name}'.");
 }
+
+/// <summary>What finished async work changed, and for async actions which exec outputs continue the chain.</summary>
+internal sealed record AsyncCompletion(IReadOnlyList<int> Changed, IReadOnlyList<ExecOutput> Fired);
 
 /// <summary>An empty port struct, for operations without inputs or outputs.</summary>
 public readonly struct Unit;

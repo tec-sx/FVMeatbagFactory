@@ -87,8 +87,22 @@ Heavy data (meshes, textures) travels as references inside the structs. Change d
 `EqualityComparer<T>.Default`, so these should be immutable snapshots or versioned handles
 (`SkeletalMeshAsset.Version` sketches this), not buffers mutated behind the graph's back.
 
-Threading: single-threaded by design (the UI thread). Long work (import, bake) will become async
-operations that complete into a later pass. **Open:** async node API.
+Threading: single-threaded by design (the UI thread). Long work (a solve, a bake, an import) is an
+`AsyncOperation<TIn, TOut>`:
+
+- When the node evaluates, `RunAsync` starts on the thread pool with a copy of the inputs and the
+  node is `Running`. Its outputs keep their previous values and nothing downstream runs yet.
+- The result is queued and applied at the start of the next `Evaluate()`, like a normal run:
+  changed outputs propagate, a throw faults the node. The app's frame tick picks it up because
+  `HasPendingWork` includes finished work; `AsyncWorkCompleted` (raised off-thread) is there for
+  hosts without a tick.
+- An input change while running cancels and restarts the work; removing the node or
+  `node.Cancel()` cancels it. A superseded result is dropped. `node.Progress` reads what
+  `AsyncContext.ReportProgress` last reported.
+- `AsyncActionOperation` is the exec-pin flavour: the chain pauses at the node and continues
+  through `Then` (or whatever `AsyncContext.Fire` chose) once the work is done, so
+  "sample poses → simulate → solve → export" is one chain.
+- `evaluator.SettleAsync()` waits and evaluates until nothing is running, for tests and tools.
 
 ### Root graph, child graphs, subgraphs
 
@@ -139,7 +153,7 @@ Documents/Projects/            ← ProjectWorkspace, created on first run like a
 └── Demo/                      ← installed on first run from assets/Samples/Demo and opened at startup
     ├── project.json           ← name, camera, light, mesh list (paths relative to the folder), poses
     └── Meshes/
-        └── MaleBaseMesh.glb   ← the sample character (CC0); imported files are copied here too,
+        └── MannyBaseMesh.glb  ← the sample character (CC0); imported files are copied here too,
                                  so the folder is self-contained
 ```
 
@@ -185,7 +199,7 @@ FBX with the native Assimp library (Silk.NET.Assimp). Either way it bakes every 
 `MeshGeometry` (positions, normals, indices) in world space. Skinned meshes are deformed into the
 rest pose the file shows (joint world × inverse bind, so armature transforms are honored); all
 their joints become one `Skeleton` (bones ordered parents first, rest transforms, inverse bind =
-inverse rest) and each vertex keeps up to four normalized `SkinWeights`. Because the stored mesh
+inverse rest) and each vertex keeps up to eight normalized `SkinWeights` (what UE5 imports by default). Because the stored mesh
 is already in the rest pose, bind pose = rest pose, which keeps later posing and weight editing
 simple. A rigged mesh gets a `SkeletonComponent` child in the scene. Its `BoneDisplayOperation`
 node turns the bones into Maya-style overlay lines that follow the mesh's transform: a
@@ -225,6 +239,68 @@ the camera on it.
 
 Undo/redo should live at the graph-edit level (input changes, connect, add/remove) as commands.
 **Open.**
+
+### Rig contract: UE5 Manny and corrective roles
+
+The muscle and corrective system (design: the "Muscle and corrective bone system" proposal) relies
+on bone names, so skeletons follow a contract (`FVMeatbag.Core.Rig`):
+
+- **Core bones** are the UE5 Manny body (`MannySkeleton`): names and hierarchy, compared ignoring
+  case like UE. Twist, IK, `interaction` and `center_of_mass` bones are optional, but must sit
+  under the right parent when present. `MannyRig.Check` lists every problem (missing bone, wrong
+  parent, duplicate name, second root) or returns a `MannyRig`; the `MannyCheckOperation` node in
+  each skeleton's graph re-checks after renames, and downstream nodes take its `Maybe<MannyRig>`.
+- **Extras** are every other bone: correctives, face bones, sockets. They may hang anywhere below
+  the core, never above a core bone. `DriverOf` gives the core bone an extra follows.
+- **Corrective roles** (`CorrectiveRoleCatalog`, from the embedded `CorrectiveRoles.json`) say
+  what an extra stands for (biceps, knee, Achilles tendon), whatever it is called. A
+  `CorrectiveTag` is role + side + optional part (`bicep_hi_l`). Names suggest tags
+  (`bicep_l`, `Quad_Upper_R`, `hipFlexor_02_L`), the user can retag, mirror to the other side or
+  rename the bone, and each extra has a mode: Solve, Lock (keep its weights) or Ignore. The
+  `CorrectiveSetup` lives on the mesh asset and is saved in `project.json` with bone renames
+  (keyed by the imported name).
+- The Demo character is the CC0 base mesh re-rigged by `tools/MannyRerig` to the Manny hierarchy,
+  with 26 sample correctives that carry no weights yet. User meshes stay out of the repository
+  (`assets/Private/` is git-ignored and CI fails on mesh files outside samples and fixtures).
+
+### Muscles
+
+Muscles are a preview that the correctives are shaped by; only the corrective bones go to
+Unreal. The logic follows the Flicker Void tools Blender add-on (`meatbag_factory`), by the same
+author, rebuilt in C# so nothing needs Blender (`FVMeatbag.Core.Muscles`).
+
+- A `Muscle` is one strand: an origin and an insertion, each a point in a bone's rest space, so
+  it follows that bone in any pose, plus optional hooks (extra bone points it bends with). A
+  muscle with several attachments (pectoral, deltoid, trapezius) is a `Group` of strands named
+  `Pectoral1_l`, `Pectoral2_l`, and so on.
+- `MuscleShape` is the strand's mesh: 10 rings of 12 around its axis plus a tip at each end.
+  The radius profile is widest at `Belly` and `Tendon` at the ends; `Width` is the radius across
+  and `Thickness` the radius along `Facing` (towards the skin). Fit to Skin stores a scale per
+  ring vertex: 85% of the room to the skin straight out from the axis, smoothed around each ring
+  and clamped to 0.2–1.6.
+- Shortening to `stretch` times the rest length widens it by `stretch^(-Volume/2)` (clamped),
+  like Blender's Stretch To with volume XZ, so Volume 1 keeps the volume.
+- Hooks work like Blender's Hook modifier: a vertex follows how the hook bone moved, by a smooth
+  falloff (`3t² − 2t³`) that reaches 0 at 0.6 rest lengths from the hook point.
+- `SkinSurface` is a bounding volume hierarchy over the rest mesh, for rays to the skin and the
+  distance to it.
+- `BodyFrame` reads the character's up, left and front from the Manny pelvis, head and upper
+  arms. `MuscleTemplate` (embedded `MuscleTemplate.json`) writes every muscle for the left side.
+  An attachment is (bone or alias, along, direction, depth): the point `along` the bone, pushed
+  to the skin in `direction` (front, left, up) and kept `depth` of the way back. The belly
+  radius is the distance to the skin at the belly point times the muscle's width and thickness.
+  `Generate` builds the left side, mirrors it across the body's center plane and fits it all,
+  replacing earlier template strands and keeping hand-made ones.
+- Muscles and correctives are many to many: each muscle lists `MuscleDrive`s (corrective role,
+  optional part, weight), and `DriveWeight(tag)` says how much it moves a corrective with that
+  tag on its side (center correctives take both sides). Many muscles may drive one role.
+- The `MuscleSet` lives on the mesh asset and is saved in `project.json` (with bone renames).
+  Muscles saved by the first preview (before strands) are left out with a note.
+- In the scene a `MuscleComponent` sits under each skeleton with three nodes: rig (bones looked
+  up, rest mesh and hook weights; runs when muscles or bone names change), frames (placed on the
+  pose's bone matrices, stretch, bulge and hook matrices; runs on every pose change) and shapes
+  (one preview mesh each, in the muscle's color). Later stages, pushing the skin and fitting
+  correctives, read the frames.
 
 ## 4. Rendering
 
@@ -278,7 +354,10 @@ always closed. The display modes (wireframe, solid, solid + wireframe, shaded) a
 `FrameContext` field: wireframe redraws the meshes with polygon mode Line, depth tested
 against the solid pass but not written (so wireframe-only shows hidden edges) with a small depth
 bias; it needs the `fillModeNonSolid` device feature and falls back to solid without it. Shaded
-draws like solid until materials exist. Overlay lines (bones) are drawn last without depth testing. Shaders live in `src/FVMeatbag.Rendering.Vulkan/Shaders` as GLSL with committed
+draws like solid until materials exist. Overlay meshes (the muscle preview) come after the meshes
+with their own tint shader: a depth-only pass, then a color pass blended by the overlay's alpha
+with depth test LessOrEqual, so each overlay shows its own front surface once. For X-ray the
+depth buffer is cleared first, so overlays show through the skin. Overlay lines (bones) are drawn last without depth testing. Shaders live in `src/FVMeatbag.Rendering.Vulkan/Shaders` as GLSL with committed
 SPIR-V. Offscreen tests render real frames on any Vulkan driver, including Mesa's software
 lavapipe, and skip when there is none.
 

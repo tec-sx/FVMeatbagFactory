@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using FVMeatbag.Graph.Ports;
 
 namespace FVMeatbag.Graph;
@@ -29,6 +30,12 @@ public enum EvaluationMode
 /// Action nodes are the exception: they run only when an exec chain reaches them (see
 /// <see cref="Trigger"/>), with the data graph settled before every step.
 /// </para>
+/// <para>
+/// Async operations run on the thread pool; their results queue up and are applied at the start of
+/// the next <see cref="Evaluate"/>, which also continues async action chains. Nothing evaluates by
+/// itself when work completes, even in <see cref="EvaluationMode.Immediate"/> mode: the host
+/// listens to <see cref="AsyncWorkCompleted"/> and evaluates on its own thread.
+/// </para>
 /// <para>Not thread-safe: own it from one thread (the UI or a dedicated graph thread).</para>
 /// </remarks>
 public sealed class GraphEvaluator
@@ -36,6 +43,10 @@ public sealed class GraphEvaluator
     private readonly HashSet<Node> _nodes = [];
     private readonly PriorityQueue<Node, (int Rank, long Sequence)> _queue = new();
     private readonly Queue<ExecInput> _triggers = new();
+    private readonly ConcurrentQueue<(Node Node, object Job)> _completed = new();
+    private readonly Lock _idleLock = new();
+    private readonly List<TaskCompletionSource> _idleWaiters = [];
+    private int _running;
     private long _sequence;
     private long _pass;
     private int _evaluatedThisPass;
@@ -53,12 +64,22 @@ public sealed class GraphEvaluator
     /// <summary>Safety valve against operations that keep re-dirtying each other through side effects.</summary>
     public int MaxEvaluationsPerPass { get; set; } = 100_000;
 
-    public bool HasPendingWork => _queue.Count > 0 || _triggers.Count > 0;
+    /// <summary>True when data nodes are dirty, action chains are queued, or finished async work waits to be applied.</summary>
+    public bool HasPendingWork => _queue.Count > 0 || _triggers.Count > 0 || !_completed.IsEmpty;
+
+    /// <summary>How many async operations are working right now.</summary>
+    public int RunningCount => Volatile.Read(ref _running);
     public bool IsBatching => _batchDepth > 0;
     public bool IsEvaluating => _evaluating;
 
     public event EventHandler<NodeEvaluatedEventArgs>? NodeEvaluated;
     public event EventHandler<NodeFaultedEventArgs>? NodeFaulted;
+
+    /// <summary>
+    /// Raised on a thread-pool thread when async work finishes. Its result is applied by the next
+    /// <see cref="Evaluate"/>, so hosts marshal to their own thread and evaluate (or redraw).
+    /// </summary>
+    public event EventHandler? AsyncWorkCompleted;
 
     /// <summary>
     /// Suspends immediate evaluation until the returned scope is disposed, then evaluates once.
@@ -86,10 +107,15 @@ public sealed class GraphEvaluator
         _evaluatedThisPass = 0;
         try
         {
+            var continuations = ApplyCompletions();
             SettleData();
+            if (continuations.Count > 0)
+            {
+                RunActionChain(continuations);
+            }
             while (_triggers.TryDequeue(out var trigger))
             {
-                RunActionChain(trigger);
+                RunActionChain([trigger]);
             }
         }
         finally
@@ -113,6 +139,83 @@ public sealed class GraphEvaluator
         RequestEvaluation();
     }
 
+    /// <summary>
+    /// Waits for async work to finish and evaluates its results, until no work is running or pending.
+    /// Call it from the thread that owns the evaluator; it continues on the captured context.
+    /// </summary>
+    public async Task SettleAsync(CancellationToken cancellation = default)
+    {
+        Evaluate();
+        while (RunningCount > 0 || HasPendingWork)
+        {
+            await WhenAsyncIdle().WaitAsync(cancellation).ConfigureAwait(true);
+            Evaluate();
+        }
+    }
+
+    /// <summary>Completes once no async work is running. Results may still wait for <see cref="Evaluate"/>.</summary>
+    public Task WhenAsyncIdle()
+    {
+        lock (_idleLock)
+        {
+            if (_running == 0)
+            {
+                return Task.CompletedTask;
+            }
+            var waiter = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _idleWaiters.Add(waiter);
+            return waiter.Task;
+        }
+    }
+
+    internal void AsyncStarted()
+    {
+        lock (_idleLock)
+        {
+            _running++;
+        }
+    }
+
+    internal void AsyncFinished(Node node, object job)
+    {
+        _completed.Enqueue((node, job));
+        TaskCompletionSource[] idle = [];
+        lock (_idleLock)
+        {
+            if (--_running == 0)
+            {
+                idle = [.. _idleWaiters];
+                _idleWaiters.Clear();
+            }
+        }
+        AsyncWorkCompleted?.Invoke(this, EventArgs.Empty);
+        foreach (var waiter in idle)
+        {
+            waiter.SetResult();
+        }
+    }
+
+    /// <summary>Applies finished async work and returns the exec inputs that async actions continue into.</summary>
+    private List<ExecInput> ApplyCompletions()
+    {
+        var continuations = new List<ExecInput>();
+        while (_completed.TryDequeue(out var completed))
+        {
+            if (!completed.Node.CompleteAsync(completed.Job).TryGetValue(out var completion))
+            {
+                continue;
+            }
+            if (completed.Node.State == NodeState.Faulted)
+            {
+                NodeFaulted?.Invoke(this, new NodeFaultedEventArgs(completed.Node, completed.Node.Fault!));
+                continue;
+            }
+            Propagate(completed.Node, completion.Changed);
+            continuations.AddRange(completion.Fired.Select(f => f.Connection?.Target).OfType<ExecInput>());
+        }
+        return continuations;
+    }
+
     private void SettleData()
     {
         while (_queue.Count > 0)
@@ -132,10 +235,14 @@ public sealed class GraphEvaluator
     }
 
     // Depth first: everything an action fires completes before the next queued trigger starts.
-    private void RunActionChain(ExecInput entry)
+    // An async action pauses its branch; the branch resumes from ApplyCompletions when the work is done.
+    private void RunActionChain(List<ExecInput> entries)
     {
         var pending = new Stack<ExecInput>();
-        pending.Push(entry);
+        for (var i = entries.Count - 1; i >= 0; i--)
+        {
+            pending.Push(entries[i]);
+        }
         while (pending.Count > 0)
         {
             var pin = pending.Pop();
@@ -146,9 +253,9 @@ public sealed class GraphEvaluator
 
             SettleData(); // the action must see up-to-date inputs, including results of earlier steps
             var context = Run(pin.Node, pin);
-            if (context is null)
+            if (context is null || pin.Node.State == NodeState.Running)
             {
-                continue; // faulted: the chain stops here
+                continue; // faulted: the chain stops here; running: it continues once the work completes
             }
 
             var fired = context.FiredOutputs;
@@ -184,6 +291,13 @@ public sealed class GraphEvaluator
             return null;
         }
 
+        Propagate(node, changed);
+        return context;
+    }
+
+    /// <summary>Dirties whatever is connected to the changed outputs and raises the evaluation events.</summary>
+    private void Propagate(Node node, IReadOnlyList<int> changed)
+    {
         var changedPorts = new OutputPort[changed.Count];
         for (var i = 0; i < changed.Count; i++)
         {
@@ -200,7 +314,6 @@ public sealed class GraphEvaluator
         {
             node.RaiseOutputsChanged(changedPorts);
         }
-        return context;
     }
 
     internal void Register(Node node)
@@ -212,6 +325,7 @@ public sealed class GraphEvaluator
 
     internal void Unregister(Node node)
     {
+        node.Cancel();
         _nodes.Remove(node);
         _ranksStale = true;
     }

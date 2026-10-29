@@ -7,6 +7,9 @@
     <Project Path="src/FVMeatbag.Rendering/FVMeatbag.Rendering.csproj" />
     <Project Path="src/FVMeatbag.Scene/FVMeatbag.Scene.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/MannyRerig/MannyRerig.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/FVMeatbag.Graph.Tests/FVMeatbag.Graph.Tests.csproj" />
     <Project Path="tests/FVMeatbag.Rendering.Vulkan.Tests/FVMeatbag.Rendering.Vulkan.Tests.csproj" />

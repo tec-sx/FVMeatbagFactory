@@ -45,6 +45,9 @@ public sealed class SkeletonComponent : SceneComponent
     /// <summary>Builds the joint spheres and bone lines; exists while the component is attached.</summary>
     public Node<BoneDisplayInput, BoneDisplayOutput>? DisplayNode { get; private set; }
 
+    /// <summary>Checks the skeleton against the UE5 Manny hierarchy; exists while attached.</summary>
+    public Node<MannyCheckInput, MannyCheckOutput>? RigCheckNode { get; private set; }
+
     /// <summary>Deforms the mesh by the pose; exists while attached and the mesh has geometry.</summary>
     public Node<SkinningInput, SkinningOutput>? SkinningNode { get; private set; }
 
@@ -157,7 +160,13 @@ public sealed class SkeletonComponent : SceneComponent
                 ColorMode = _colorMode,
                 SelectedBone = _selectedBone,
                 World = WorldMatrix,
+                SkeletonVersion = Skeleton.Version,
             });
+        RigCheckNode = graph.AddNode(
+            new MannyCheckOperation(),
+            $"{Name}.MannyCheck",
+            new MannyCheckInput { Skeleton = Skeleton, SkeletonVersion = Skeleton.Version });
+        Skeleton.Renamed += OnSkeletonRenamed;
         graph.Connect(TransformNode!.Output(nameof(WorldTransformOutput.World)), DisplayNode.Input(nameof(BoneDisplayInput.World)));
         graph.Connect(PoseNode.Output(nameof(PoseOutput.BoneWorld)), DisplayNode.Input(nameof(BoneDisplayInput.BoneWorld)));
         if (_geometry.HasValue)
@@ -171,12 +180,21 @@ public sealed class SkeletonComponent : SceneComponent
     protected override void OnDetaching()
     {
         Pose.Changed -= OnPoseChanged;
+        Skeleton.Renamed -= OnSkeletonRenamed;
         PoseNode = null;
         DisplayNode = null;
+        RigCheckNode = null;
         SkinningNode = null;
     }
 
     private void OnPoseChanged(object? sender, EventArgs e) => PoseNode?.UpdateInputs((ref PoseInput i) => i.Version = Pose.Version);
+
+    private void OnSkeletonRenamed(object? sender, EventArgs e)
+    {
+        var version = Skeleton.Version;
+        DisplayNode?.UpdateInputs((ref BoneDisplayInput i) => i.SkeletonVersion = version);
+        RigCheckNode?.UpdateInputs((ref MannyCheckInput i) => i.SkeletonVersion = version);
+    }
 
     /// <summary>World matrix from the parent's current local transforms, so it is right even before the graph evaluates.</summary>
     private Matrix4x4 CurrentWorldMatrix()

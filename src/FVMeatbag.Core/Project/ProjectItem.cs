@@ -1,4 +1,6 @@
 using FVMeatbag.Core.Import;
+using FVMeatbag.Core.Muscles;
+using FVMeatbag.Core.Rig;
 using FVMeatbag.Graph;
 
 namespace FVMeatbag.Core.Project;
@@ -93,6 +95,33 @@ public sealed class SkeletalMeshAsset(string name, string? sourcePath = null) : 
 
     /// <summary>The skeleton's current pose, saved with the project; None for a static mesh. Starts at rest.</summary>
     public Maybe<SkeletonPose> Pose { get; private set; }
+
+    /// <summary>Roles and solve modes of the skeleton's corrective bones, saved with the project.</summary>
+    public CorrectiveSetup Correctives { get; } = new();
+
+    /// <summary>The muscles placed on the skeleton, saved with the project.</summary>
+    public MuscleSet Muscles { get; } = new();
+
+    /// <summary>
+    /// Renames a bone of the skeleton and moves its corrective binding and muscle attachments along. Returns false if
+    /// another bone already has that name (ignoring case) or the mesh has no skeleton.
+    /// </summary>
+    public bool RenameBone(int bone, string name)
+    {
+        if (!_skeleton.TryGetValue(out var skeleton))
+        {
+            return false;
+        }
+        var old = skeleton.Bones[bone].Name;
+        if (!skeleton.Rename(bone, name))
+        {
+            return false;
+        }
+        Correctives.RenameBone(old, skeleton.Bones[bone].Name);
+        Muscles.RenameBone(old, skeleton.Bones[bone].Name);
+        MarkModified();
+        return true;
+    }
 
     /// <summary>Bumped on every edit, so graph change detection can compare versions instead of data.</summary>
     public long Version { get; private set; }

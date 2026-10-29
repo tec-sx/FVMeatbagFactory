@@ -24,8 +24,8 @@
   },
   "meshes": [
     {
-      "name": "MaleBaseMesh",
-      "path": "Meshes/MaleBaseMesh.glb"
+      "name": "MannyBaseMesh",
+      "path": "Meshes/MannyBaseMesh.glb"
     }
   ]
 }

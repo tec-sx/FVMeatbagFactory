@@ -135,6 +135,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Shows or hides every mesh's muscle preview.</summary>
+    public bool ShowMuscles
+    {
+        get => Host.Scene.ShowMuscles;
+        set
+        {
+            Host.Scene.ShowMuscles = value;
+            OnPropertyChanged();
+            Details?.Refresh();
+        }
+    }
+
     [RelayCommand]
     private async Task NewProject()
     {
@@ -271,7 +283,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             OrbitCameraComponent camera => new CameraDetailsViewModel(camera),
             DirectionalLightComponent light => new LightDetailsViewModel(light),
             MeshComponent mesh => new MeshDetailsViewModel(Host.Scene, mesh),
-            SkeletonComponent skeleton => new SkeletonDetailsViewModel(skeleton),
+            SkeletonComponent skeleton => new SkeletonDetailsViewModel(
+                skeleton, Maybe.From(skeleton.Parent as MeshComponent).Bind(Host.Scene.FindAsset)),
+            MuscleComponent muscles => new MuscleDetailsViewModel(
+                Host.Scene, muscles, Maybe.From(muscles.Skeleton?.Parent as MeshComponent).Bind(Host.Scene.FindAsset)),
             _ => null,
         };
     }
