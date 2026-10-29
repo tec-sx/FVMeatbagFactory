@@ -266,26 +266,41 @@ on bone names, so skeletons follow a contract (`FVMeatbag.Core.Rig`):
 ### Muscles
 
 Muscles are a preview that the correctives are shaped by; only the corrective bones go to
-Unreal. The ideas come from Blender muscle rigs (stretch with volume preservation, flexor and
-extensor, tendons), reimplemented here, not ported (`FVMeatbag.Core.Muscles`).
+Unreal. The logic follows the Flicker Void tools Blender add-on (`meatbag_factory`), by the same
+author, rebuilt in C# so nothing needs Blender (`FVMeatbag.Core.Muscles`).
 
-- A `Muscle` has an origin and an insertion, each a point in a bone's rest space, so it follows
-  that bone in any pose. Its shape is a spindle: radius, flatness (depth over width, facing a
-  stored direction), fullness and tendon lengths. Shortening to `stretch` times the rest length
-  widens the belly by `stretch^(-Volume/2)` (clamped), so Volume 1 keeps the volume; extensors
-  use the inverse.
+- A `Muscle` is one strand: an origin and an insertion, each a point in a bone's rest space, so
+  it follows that bone in any pose, plus optional hooks (extra bone points it bends with). A
+  muscle with several attachments (pectoral, deltoid, trapezius) is a `Group` of strands named
+  `Pectoral1_l`, `Pectoral2_l`, and so on.
+- `MuscleShape` is the strand's mesh: 10 rings of 12 around its axis plus a tip at each end.
+  The radius profile is widest at `Belly` and `Tendon` at the ends; `Width` is the radius across
+  and `Thickness` the radius along `Facing` (towards the skin). Fit to Skin stores a scale per
+  ring vertex: 85% of the room to the skin straight out from the axis, smoothed around each ring
+  and clamped to 0.2–1.6.
+- Shortening to `stretch` times the rest length widens it by `stretch^(-Volume/2)` (clamped),
+  like Blender's Stretch To with volume XZ, so Volume 1 keeps the volume.
+- Hooks work like Blender's Hook modifier: a vertex follows how the hook bone moved, by a smooth
+  falloff (`3t² − 2t³`) that reaches 0 at 0.6 rest lengths from the hook point.
+- `SkinSurface` is a bounding volume hierarchy over the rest mesh, for rays to the skin and the
+  distance to it.
+- `BodyFrame` reads the character's up, left and front from the Manny pelvis, head and upper
+  arms. `MuscleTemplate` (embedded `MuscleTemplate.json`) writes every muscle for the left side.
+  An attachment is (bone or alias, along, direction, depth): the point `along` the bone, pushed
+  to the skin in `direction` (front, left, up) and kept `depth` of the way back. The belly
+  radius is the distance to the skin at the belly point times the muscle's width and thickness.
+  `Generate` builds the left side, mirrors it across the body's center plane and fits it all,
+  replacing earlier template strands and keeping hand-made ones.
 - Muscles and correctives are many to many: each muscle lists `MuscleDrive`s (corrective role,
   optional part, weight), and `DriveWeight(tag)` says how much it moves a corrective with that
-  tag on its side. Many muscles may drive one role.
-- `BodyFrame` reads the character's up, left and forward from the Manny pelvis, head and upper
-  arms, with pelvis-to-head as the unit. `MuscleTemplate` (embedded `MuscleTemplate.json`, 18
-  muscles, 35 with both sides) places muscles in those terms by Manny bone names, so it fits any
-  size, up axis and facing. It also mirrors muscles across the body's center plane.
+  tag on its side (center correctives take both sides). Many muscles may drive one role.
 - The `MuscleSet` lives on the mesh asset and is saved in `project.json` (with bone renames).
+  Muscles saved by the first preview (before strands) are left out with a note.
 - In the scene a `MuscleComponent` sits under each skeleton with three nodes: rig (bones looked
-  up, rest lengths; runs when muscles or bone names change), frames (placed on the pose's bone
-  matrices, stretch and bulge; runs on every pose change) and shapes (one preview mesh each).
-  Later stages, pushing the skin and fitting correctives, read the frames.
+  up, rest mesh and hook weights; runs when muscles or bone names change), frames (placed on the
+  pose's bone matrices, stretch, bulge and hook matrices; runs on every pose change) and shapes
+  (one preview mesh each, in the muscle's color). Later stages, pushing the skin and fitting
+  correctives, read the frames.
 
 ## 4. Rendering
 

@@ -405,9 +405,7 @@ public sealed class ViewportControl : Control
         return lines;
     }
 
-    /// <summary>Display colors of the muscle preview; the alpha comes from the scene's muscle opacity.</summary>
-    private static readonly Vector3 MuscleColor = new(0.80f, 0.24f, 0.22f);
-
+    /// <summary>Color of the selected muscle; the others show their own color, with the scene's muscle opacity as alpha.</summary>
     private static readonly Vector3 SelectedMuscleColor = new(1.00f, 0.66f, 0.22f);
 
     private static List<OverlayDraw> BuildOverlays(SceneRoot scene)
@@ -425,7 +423,7 @@ public sealed class ViewportControl : Control
             {
                 var color = muscle.Selected
                     ? new Vector4(SelectedMuscleColor, Math.Max(opacity, 0.85f))
-                    : new Vector4(MuscleColor, opacity);
+                    : new Vector4(muscle.Color, opacity);
                 var mesh = new RenderMesh(muscle.Id, shapes.Version, muscle.Positions, muscle.Normals, muscle.Indices);
                 overlays.Add(new OverlayDraw(mesh, muscles.WorldMatrix, color));
             }

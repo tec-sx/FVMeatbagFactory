@@ -292,8 +292,12 @@
                              Foreground="{DynamicResource Theme.DimText}" FontSize="{DynamicResource Theme.SmallFontSize}" />
                   <TextBlock Text="A preview to shape the correctives by; only the corrective bones go to Unreal."
                              TextWrapping="Wrap" Foreground="{DynamicResource Theme.DimText}" FontSize="{DynamicResource Theme.SmallFontSize}" />
-                  <Button Content="Add muscles from the body template" Command="{Binding AddTemplateCommand}" IsEnabled="{Binding CanUseTemplate}"
-                          ToolTip.Tip="Places the body's main muscles by the UE5 Manny bones. Muscles already there are kept." Padding="8,2" />
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Button Content="Build from the body template" Command="{Binding AddTemplateCommand}" IsEnabled="{Binding CanUseTemplate}"
+                            ToolTip.Tip="Places the body's main muscles under the skin by the UE5 Manny bones, mirrors them and fits them to the skin. Replaces earlier template muscles; hand-made ones are kept." Padding="8,2" />
+                    <Button Content="Fit all" Command="{Binding FitAllToSkinCommand}" IsEnabled="{Binding CanUseTemplate}"
+                            ToolTip.Tip="Fit every muscle to the skin again." Padding="8,2" />
+                  </StackPanel>
                   <CheckBox Content="Show muscles" IsChecked="{Binding ShowMuscles}" />
                   <CheckBox Content="See through the skin (X-ray)" IsChecked="{Binding ThroughSkin}" />
                   <Grid ColumnDefinitions="96,*">
@@ -325,29 +329,26 @@
                   </Border>
                   <TextBlock Text="{Binding SelectedInfo}" TextWrapping="Wrap" Opacity="0.85" Margin="0,4,0,0" />
                   <StackPanel Spacing="2" IsVisible="{Binding HasSelection}">
-                    <ComboBox ItemsSource="{Binding ActionChoices}" SelectedIndex="{Binding ActionIndex}" HorizontalAlignment="Stretch" />
-                    <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
-                      <TextBlock Grid.Row="0" Text="{Binding Radius, StringFormat='Radius {0:0.###}'}" VerticalAlignment="Center"
-                                 ToolTip.Tip="Belly half-width, in body units (pelvis to head)." />
-                      <Slider Grid.Row="0" Grid.Column="1" Minimum="0.005" Maximum="0.15" Value="{Binding Radius}" />
-                      <TextBlock Grid.Row="1" Text="{Binding Flatness, StringFormat='Flatness {0:0.##}'}" VerticalAlignment="Center"
-                                 ToolTip.Tip="Depth over width: 1 is round, lower is flatter." />
-                      <Slider Grid.Row="1" Grid.Column="1" Minimum="0.1" Maximum="1" Value="{Binding Flatness}" />
-                      <TextBlock Grid.Row="2" Text="{Binding Thickness, StringFormat='Fullness {0:0.##}'}" VerticalAlignment="Center"
-                                 ToolTip.Tip="Positive gives a fuller belly, negative a slimmer one." />
-                      <Slider Grid.Row="2" Grid.Column="1" Minimum="-1" Maximum="1" Value="{Binding Thickness}" />
-                      <TextBlock Grid.Row="3" Text="{Binding Volume, StringFormat='Bulge {0:0.##}'}" VerticalAlignment="Center"
+                    <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                      <TextBlock Grid.Row="0" Text="{Binding Width, StringFormat='Width {0:0.###}'}" VerticalAlignment="Center"
+                                 ToolTip.Tip="Belly radius across the muscle, in body units (pelvis to head)." />
+                      <Slider Grid.Row="0" Grid.Column="1" Minimum="0.001" Maximum="0.15" Value="{Binding Width}" />
+                      <TextBlock Grid.Row="1" Text="{Binding Thickness, StringFormat='Thickness {0:0.###}'}" VerticalAlignment="Center"
+                                 ToolTip.Tip="Belly radius towards the skin, in body units (pelvis to head)." />
+                      <Slider Grid.Row="1" Grid.Column="1" Minimum="0.001" Maximum="0.15" Value="{Binding Thickness}" />
+                      <TextBlock Grid.Row="2" Text="{Binding Belly, StringFormat='Belly {0:P0}'}" VerticalAlignment="Center"
+                                 ToolTip.Tip="Where the muscle is widest, from the origin (0%) to the insertion (100%)." />
+                      <Slider Grid.Row="2" Grid.Column="1" Minimum="0.05" Maximum="0.95" Value="{Binding Belly}" />
+                      <TextBlock Grid.Row="3" Text="{Binding Tendon, StringFormat='Tendon {0:P0}'}" VerticalAlignment="Center"
+                                 ToolTip.Tip="Radius at the ends, as a share of the belly's." />
+                      <Slider Grid.Row="3" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding Tendon}" />
+                      <TextBlock Grid.Row="4" Text="{Binding Volume, StringFormat='Bulge {0:0.##}'}" VerticalAlignment="Center"
                                  ToolTip.Tip="1 keeps the volume when the muscle shortens; 0 never bulges." />
-                      <Slider Grid.Row="3" Grid.Column="1" Minimum="0" Maximum="2" Value="{Binding Volume}" />
-                      <TextBlock Grid.Row="4" Text="{Binding OriginTendon, StringFormat='Tendon in {0:P0}'}" VerticalAlignment="Center"
-                                 ToolTip.Tip="Length of the tendon at the origin, as a share of the muscle." />
-                      <Slider Grid.Row="4" Grid.Column="1" Minimum="0" Maximum="0.5" Value="{Binding OriginTendon}" />
-                      <TextBlock Grid.Row="5" Text="{Binding InsertionTendon, StringFormat='Tendon out {0:P0}'}" VerticalAlignment="Center"
-                                 ToolTip.Tip="Length of the tendon at the insertion, as a share of the muscle." />
-                      <Slider Grid.Row="5" Grid.Column="1" Minimum="0" Maximum="0.5" Value="{Binding InsertionTendon}" />
+                      <Slider Grid.Row="4" Grid.Column="1" Minimum="0" Maximum="2" Value="{Binding Volume}" />
                     </Grid>
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                      <Button Content="Mirror" Command="{Binding MirrorCommand}" Padding="8,2" ToolTip.Tip="Copy to the other side, replacing its twin." />
+                      <Button Content="Fit to skin" Command="{Binding FitToSkinCommand}" Padding="8,2" ToolTip.Tip="Give every ring the room it has under the skin." />
+                      <Button Content="Mirror" Command="{Binding MirrorCommand}" Padding="8,2" ToolTip.Tip="Copy to the other side, replacing its twin, and fit it there." />
                       <Button Content="Reset" Command="{Binding ResetToTemplateCommand}" Padding="8,2" ToolTip.Tip="Back to the template's placement, shape and drives." />
                       <Button Content="Remove" Command="{Binding RemoveCommand}" Padding="8,2" />
                     </StackPanel>

@@ -5,28 +5,54 @@ using FVMeatbag.Graph;
 
 namespace FVMeatbag.Scene.Operations;
 
-/// <summary>A muscle with its bones looked up in the skeleton.</summary>
+/// <summary>A muscle with its bones looked up in the skeleton and its rest mesh built.</summary>
 /// <param name="Index">Position in the <see cref="MuscleSet"/>.</param>
 /// <param name="RestLength">Origin to insertion at rest, in model units.</param>
-public readonly record struct ResolvedMuscle(int Index, Muscle Muscle, int OriginBone, int InsertionBone, float RestLength);
+/// <param name="Local">The strand's vertices in its own space (<see cref="MuscleShape.LocalVertices"/>), Fit to Skin applied.</param>
+/// <param name="Rest">The strand's space to model space at rest.</param>
+public readonly record struct ResolvedMuscle(
+    int Index,
+    Muscle Muscle,
+    int OriginBone,
+    int InsertionBone,
+    float RestLength,
+    ReadOnlyMemory<Vector3> Local,
+    Matrix4x4 Rest,
+    ReadOnlyMemory<ResolvedHook> Hooks);
+
+/// <summary>A hook of a muscle: a bone that also bends the vertices near its point, like Blender's Hook modifier.</summary>
+/// <param name="InverseRest">Inverse of the bone's rest transform, so the pose gives how far the bone moved.</param>
+/// <param name="Weights">How much each vertex follows the bone: 1 at the hook point, fading smoothly to 0 at 0.6 rest lengths.</param>
+public readonly record struct ResolvedHook(int Bone, Matrix4x4 InverseRest, ReadOnlyMemory<float> Weights);
 
 /// <summary>Where a muscle is in the current pose, model space.</summary>
-/// <param name="Facing">Unit direction the outer surface faces, at right angles to the muscle.</param>
+/// <param name="Facing">Unit direction the thickness axis points, at right angles to the muscle.</param>
 /// <param name="Stretch">Posed length over rest length: below 1 when the muscle shortens.</param>
 /// <param name="CrossScale">How much wider the belly is than at rest; see <see cref="Muscle.CrossScale"/>.</param>
-public readonly record struct MuscleFrame(Vector3 Origin, Vector3 Insertion, Vector3 Facing, float Stretch, float CrossScale)
+/// <param name="Transform">The strand's space to model space: stretched along its length, widened across.</param>
+/// <param name="Hooks">Per hook, how it moves the strand's vertices, in the strand's own space.</param>
+public readonly record struct MuscleFrame(
+    Vector3 Origin,
+    Vector3 Insertion,
+    Vector3 Facing,
+    float Stretch,
+    float CrossScale,
+    Matrix4x4 Transform,
+    ReadOnlyMemory<Matrix4x4> Hooks)
 {
     public float Length => Vector3.Distance(Origin, Insertion);
 }
 
 /// <summary>A muscle's preview mesh for one pose, model space.</summary>
 /// <param name="Id">Stable for the muscle while it stays at the same position in its set, so renderers can reuse uploads.</param>
+/// <param name="Color">The muscle's display color, sRGB.</param>
 public readonly record struct MuscleMesh(
     Guid Id,
     int Index,
     ReadOnlyMemory<Vector3> Positions,
     ReadOnlyMemory<Vector3> Normals,
     ReadOnlyMemory<uint> Indices,
+    Vector3 Color,
     bool Selected);
 
 public struct MuscleRigInput
@@ -70,21 +96,48 @@ public sealed class MuscleRigOperation : Operation<MuscleRigInput, MuscleRigOutp
         for (var i = 0; i < set.Count; i++)
         {
             var muscle = set.Muscles[i];
-            var origin = skeleton.FindBone(muscle.Origin.Bone);
-            var insertion = skeleton.FindBone(muscle.Insertion.Bone);
-            if (!origin.TryGetValue(out var o) || !insertion.TryGetValue(out var n))
+            var bones = new[] { muscle.Origin, muscle.Insertion }.Concat(muscle.Hooks).Select(a => (a.Bone, Index: skeleton.FindBone(a.Bone))).ToList();
+            if (bones.FirstOrNone(b => b.Index.IsNone).TryGetValue(out var missing))
             {
-                problems.Add($"{muscle.Name}: the skeleton lacks {(origin.IsNone ? muscle.Origin.Bone : muscle.Insertion.Bone)}.");
+                problems.Add($"{muscle.Name}: the skeleton lacks {missing.Bone}.");
                 continue;
             }
-            var length = Vector3.Distance(
-                Vector3.Transform(muscle.Origin.Local, skeleton.WorldRest[o]),
-                Vector3.Transform(muscle.Insertion.Local, skeleton.WorldRest[n]));
-            resolved.Add(new ResolvedMuscle(i, muscle, o, n, length));
+            resolved.Add(Resolve(i, muscle, bones[0].Index.Value, bones[1].Index.Value, [.. bones.Skip(2).Select(b => b.Index.Value)], skeleton));
         }
         output.Muscles = resolved.ToArray();
         output.Problems = problems;
     }
+
+    public static ResolvedMuscle Resolve(int index, Muscle muscle, int originBone, int insertionBone, IReadOnlyList<int> hookBones, Skeleton skeleton)
+    {
+        ArgumentNullException.ThrowIfNull(muscle);
+        ArgumentNullException.ThrowIfNull(hookBones);
+        ArgumentNullException.ThrowIfNull(skeleton);
+        var rest = skeleton.WorldRest;
+        var origin = Vector3.Transform(muscle.Origin.Local, rest[originBone]);
+        var insertion = Vector3.Transform(muscle.Insertion.Local, rest[insertionBone]);
+        var length = Vector3.Distance(origin, insertion);
+        var local = MuscleShape.LocalVertices(muscle, length);
+        var restTransform = MuscleShapeOperation.StrandTransform(origin, insertion, Vector3.TransformNormal(muscle.Facing, rest[originBone]), 1f, 1f);
+        var falloff = MathF.Max(length * HookFalloff, 1e-3f);
+        var hooks = new ResolvedHook[hookBones.Count];
+        for (var h = 0; h < hooks.Length; h++)
+        {
+            var bone = hookBones[h];
+            var center = Vector3.Transform(muscle.Hooks[h].Local, rest[bone]);
+            var weights = new float[local.Length];
+            for (var v = 0; v < local.Length; v++)
+            {
+                var t = 1f - (Vector3.Distance(Vector3.Transform(local[v], restTransform), center) / falloff);
+                weights[v] = t <= 0f ? 0f : t * t * (3f - (2f * t));
+            }
+            hooks[h] = new ResolvedHook(bone, Matrix4x4.Invert(rest[bone], out var inverse) ? inverse : Matrix4x4.Identity, weights);
+        }
+        return new ResolvedMuscle(index, muscle, originBone, insertionBone, length, local, restTransform, hooks);
+    }
+
+    /// <summary>A hook's reach, relative to the strand's rest length.</summary>
+    public const float HookFalloff = 0.6f;
 }
 
 public struct MuscleFrameInput
@@ -130,18 +183,25 @@ public sealed class MuscleFrameOperation : Operation<MuscleFrameInput, MuscleFra
         var originWorld = bones[resolved.OriginBone];
         var origin = Vector3.Transform(muscle.Origin.Local, originWorld);
         var insertion = Vector3.Transform(muscle.Insertion.Local, bones[resolved.InsertionBone]);
-        var axis = insertion - origin;
-        var length = axis.Length();
-        var direction = length > 1e-6f ? axis / length : Vector3.UnitY;
-        var facing = Vector3.TransformNormal(muscle.Facing, originWorld);
-        facing -= Vector3.Dot(facing, direction) * direction;
-        if (facing.LengthSquared() < 1e-10f)
-        {
-            // Facing along the muscle: any direction at right angles will do.
-            facing = Vector3.Cross(direction, MathF.Abs(direction.Y) < 0.9f ? Vector3.UnitY : Vector3.UnitX);
-        }
+        var length = Vector3.Distance(origin, insertion);
         var stretch = resolved.RestLength > 1e-6f ? length / resolved.RestLength : 1f;
-        return new MuscleFrame(origin, insertion, Vector3.Normalize(facing), stretch, muscle.CrossScale(stretch));
+        var cross = muscle.CrossScale(stretch);
+        var transform = MuscleShapeOperation.StrandTransform(origin, insertion, Vector3.TransformNormal(muscle.Facing, originWorld), stretch, cross);
+        var hookSpan = resolved.Hooks.Span;
+        var hooks = new Matrix4x4[hookSpan.Length];
+        if (hooks.Length > 0 && Matrix4x4.Invert(transform, out var toStrand))
+        {
+            for (var h = 0; h < hooks.Length; h++)
+            {
+                var hook = hookSpan[h];
+                // Strand space at rest → model → how the hook bone moved → strand space now.
+                hooks[h] = hook.Bone < bones.Length
+                    ? resolved.Rest * hook.InverseRest * bones[hook.Bone] * toStrand
+                    : Matrix4x4.Identity;
+            }
+        }
+        var facing = new Vector3(transform.M31, transform.M32, transform.M33);
+        return new MuscleFrame(origin, insertion, Vector3.Normalize(facing), stretch, cross, transform, hooks);
     }
 }
 
@@ -187,89 +247,51 @@ public sealed class MuscleShapeOperation : Operation<MuscleShapeInput, MuscleSha
         var meshes = new MuscleMesh[muscles.Length];
         for (var i = 0; i < muscles.Length; i++)
         {
-            var (positions, normals, indices) = MuscleMeshBuilder.Build(muscles[i].Muscle, frames[i]);
+            var (positions, normals) = Build(muscles[i], frames[i]);
             var index = muscles[i].Index;
-            meshes[i] = new MuscleMesh(MeshId(input.Owner, index), index, positions, normals, indices, input.Selected == index);
+            meshes[i] = new MuscleMesh(MeshId(input.Owner, index), index, positions, normals, MuscleShape.Triangles, muscles[i].Muscle.Color, input.Selected == index);
         }
         output.Meshes = meshes;
     }
 
-    private static Guid MeshId(Guid owner, int index)
+    /// <summary>
+    /// The strand's space to model space: Y along the strand scaled by <paramref name="stretch"/>,
+    /// X and Z across it scaled by <paramref name="cross"/>, Z towards <paramref name="facing"/>.
+    /// </summary>
+    public static Matrix4x4 StrandTransform(Vector3 origin, Vector3 insertion, Vector3 facing, float stretch, float cross)
     {
-        Span<byte> bytes = stackalloc byte[16];
-        owner.TryWriteBytes(bytes);
-        BitConverter.TryWriteBytes(bytes[12..], BitConverter.ToInt32(bytes[12..]) ^ (index + 1));
-        return new Guid(bytes);
+        var (x, y, z) = MuscleShape.Axes(origin, insertion, facing);
+        x *= cross;
+        y *= stretch;
+        z *= cross;
+        return new Matrix4x4(
+            x.X, x.Y, x.Z, 0f,
+            y.X, y.Y, y.Z, 0f,
+            z.X, z.Y, z.Z, 0f,
+            origin.X, origin.Y, origin.Z, 1f);
     }
-}
 
-/// <summary>Triangle mesh of one muscle: a tube from origin to insertion with an elliptical section.</summary>
-public static class MuscleMeshBuilder
-{
-    public const int Rings = 24;
-    public const int Segments = 16;
-
-    /// <summary>Tendon radius as a fraction of the belly's rest radius.</summary>
-    private const float TendonRadius = 0.18f;
-
-    public static (Vector3[] Positions, Vector3[] Normals, uint[] Indices) Build(Muscle muscle, MuscleFrame frame)
+    /// <summary>The posed vertices and normals of a strand: hooks bend it in its own space, then it is placed.</summary>
+    public static (Vector3[] Positions, Vector3[] Normals) Build(in ResolvedMuscle resolved, in MuscleFrame frame)
     {
-        ArgumentNullException.ThrowIfNull(muscle);
-        var axis = frame.Insertion - frame.Origin;
-        var length = axis.Length();
-        var direction = length > 1e-6f ? axis / length : Vector3.UnitY;
-        var depthAxis = frame.Facing;
-        var widthAxis = Vector3.Normalize(Vector3.Cross(direction, depthAxis));
-        var flatness = Math.Clamp(muscle.Flatness, 0.05f, 1f);
-        var tendonStart = Math.Clamp(muscle.Tendons.X, 0f, 0.45f);
-        var tendonEnd = Math.Clamp(muscle.Tendons.Y, 0f, 0.45f);
-        // Thin muscles are even along their length, thick ones bulge in the middle.
-        var exponent = 0.8f * MathF.Pow(2f, -Math.Clamp(muscle.Thickness, -1f, 1f));
-        var belly = muscle.Radius * frame.CrossScale;
-        var tendon = muscle.Radius * TendonRadius;
-
-        var positions = new Vector3[(Rings * Segments) + 2];
-        for (var ring = 0; ring < Rings; ring++)
+        var local = resolved.Local.Span;
+        var hooks = resolved.Hooks.Span;
+        var hookMatrices = frame.Hooks.Span;
+        var positions = new Vector3[local.Length];
+        for (var v = 0; v < local.Length; v++)
         {
-            var t = (ring + 1f) / (Rings + 1f);
-            var u = (t - tendonStart) / Math.Max(1f - tendonStart - tendonEnd, 1e-3f);
-            var radius = u is > 0f and < 1f ? tendon + ((belly - tendon) * MathF.Pow(MathF.Sin(MathF.PI * u), exponent)) : tendon;
-            var center = frame.Origin + (axis * t);
-            for (var segment = 0; segment < Segments; segment++)
+            var point = local[v];
+            for (var h = 0; h < hooks.Length && h < hookMatrices.Length; h++)
             {
-                var angle = 2f * MathF.PI * segment / Segments;
-                positions[(ring * Segments) + segment] = center
-                    + (MathF.Cos(angle) * radius * widthAxis)
-                    + (MathF.Sin(angle) * radius * flatness * depthAxis);
+                var weight = hooks[h].Weights.Span[v];
+                if (weight > 0f)
+                {
+                    point = Vector3.Lerp(point, Vector3.Transform(point, hookMatrices[h]), weight);
+                }
             }
+            positions[v] = Vector3.Transform(point, frame.Transform);
         }
-        var startTip = Rings * Segments;
-        var endTip = startTip + 1;
-        positions[startTip] = frame.Origin;
-        positions[endTip] = frame.Insertion;
-
-        var indices = new List<uint>(((Rings - 1) * Segments * 6) + (Segments * 6));
-        for (var ring = 0; ring + 1 < Rings; ring++)
-        {
-            for (var segment = 0; segment < Segments; segment++)
-            {
-                var next = (segment + 1) % Segments;
-                var a = (uint)((ring * Segments) + segment);
-                var b = (uint)((ring * Segments) + next);
-                var c = (uint)(((ring + 1) * Segments) + segment);
-                var d = (uint)(((ring + 1) * Segments) + next);
-                indices.AddRange([a, c, b, b, c, d]);
-            }
-        }
-        var last = (Rings - 1) * Segments;
-        for (var segment = 0; segment < Segments; segment++)
-        {
-            var next = (segment + 1) % Segments;
-            indices.AddRange([(uint)startTip, (uint)segment, (uint)next]);
-            indices.AddRange([(uint)endTip, (uint)(last + next), (uint)(last + segment)]);
-        }
-        var triangles = indices.ToArray();
-        return (positions, Normals(positions, triangles), triangles);
+        return (positions, Normals(positions, MuscleShape.Triangles));
     }
 
     /// <summary>Area-weighted vertex normals from the triangles.</summary>
@@ -289,5 +311,13 @@ public static class MuscleMeshBuilder
             normals[i] = normals[i].LengthSquared() > 1e-20f ? Vector3.Normalize(normals[i]) : Vector3.UnitY;
         }
         return normals;
+    }
+
+    private static Guid MeshId(Guid owner, int index)
+    {
+        Span<byte> bytes = stackalloc byte[16];
+        owner.TryWriteBytes(bytes);
+        BitConverter.TryWriteBytes(bytes[12..], BitConverter.ToInt32(bytes[12..]) ^ (index + 1));
+        return new Guid(bytes);
     }
 }

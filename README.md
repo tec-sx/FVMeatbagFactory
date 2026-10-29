@@ -48,15 +48,17 @@ camera and one light; select them in the outliner to adjust them.
   evenly. The mesh follows the bones (linear blend skinning). Details shows the bone's
   translate, rotate (relative to rest, like Maya's joint orient) and scale, with **Reset bone**
   and **Reset pose**. Poses are saved with the project.
-- **Muscles.** Select **Muscles** under a skeleton in the outliner and press **Add muscles from
-  the body template** to place the body's main muscles on a UE5 Manny skeleton. They are a
-  see-through preview (opacity and X-ray in Details, the arm button in the top bar shows or
-  hides them) that follows the pose: muscles shorten and bulge as joints bend. Pick a muscle in
-  the list to highlight it and change its radius, flatness, fullness, bulge, tendons and
-  flexor/extensor action, mirror it to the other side, or reset it. Each muscle drives one or
-  more corrective roles with a weight, and many muscles may drive one role; Details lists the
-  tagged corrective bones it moves. Only the corrective bones go to Unreal. Muscles are saved
-  with the project.
+- **Muscles.** Select **Muscles** under a skeleton in the outliner and press **Build from the
+  body template**: the body's main muscles (the Flicker Void tools' template, 18 muscles in 29
+  strands a side) are placed under the skin of a UE5 Manny-rigged mesh, mirrored to the right
+  side and fitted to the skin. They are a see-through preview (opacity and X-ray in Details, the
+  arm button in the top bar shows or hides them) that follows the pose: muscles shorten and
+  bulge as joints bend, and broad ones like the gluteus also bend with nearby bones. Pick a
+  muscle in the list to highlight it and change its width, thickness, belly, tendon and bulge,
+  fit it to the skin, mirror it to the other side, or reset it. Each muscle drives one or more
+  corrective roles with a weight, and many muscles may drive one role; Details lists the tagged
+  corrective bones it moves. Only the corrective bones go to Unreal. Muscles are saved with the
+  project.
 - Viewport: click to select a bone, drag empty space to orbit, right drag or Shift+drag to pan,
   wheel to zoom, F to frame.
 

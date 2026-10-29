@@ -218,9 +218,14 @@ public static class ProjectFile
 
         public void ApplyMuscles(MuscleSet muscles, ICollection<string>? problems)
         {
+            var outdated = 0;
             foreach (var muscle in Muscles ?? [])
             {
-                if (muscle.ToMuscle().TryGetValue(out var loaded))
+                if (muscle.Belly is null)
+                {
+                    outdated++;
+                }
+                else if (muscle.ToMuscle().TryGetValue(out var loaded))
                 {
                     muscles.Set(loaded);
                 }
@@ -228,6 +233,10 @@ public static class ProjectFile
                 {
                     problems?.Add($"{Name}: a muscle has no name or bones ({muscle.Name}).");
                 }
+            }
+            if (outdated > 0)
+            {
+                problems?.Add($"{Name}: {outdated} muscles were saved by an older version and were left out; add the template again.");
             }
         }
 
@@ -250,58 +259,74 @@ public static class ProjectFile
     private sealed class MuscleDocument
     {
         public string? Name { get; set; }
+        public string? Group { get; set; }
         public string? Template { get; set; }
+        public int Strand { get; set; }
         public string? Side { get; set; }
         public AttachmentDocument? Origin { get; set; }
         public AttachmentDocument? Insertion { get; set; }
+        public List<AttachmentDocument>? Hooks { get; set; }
         public float[]? Facing { get; set; }
-        public string? Shape { get; set; }
-        public string? Action { get; set; }
-        public float Radius { get; set; }
-        public float Flatness { get; set; }
+        public float Width { get; set; }
         public float Thickness { get; set; }
+
+        /// <summary>Missing in muscles saved before the Flicker Void shapes, which can't be read.</summary>
+        public float? Belly { get; set; }
+
+        public float Tendon { get; set; }
         public float Volume { get; set; }
-        public float[]? Tendons { get; set; }
+        public float Offset { get; set; }
+        public float[]? Fit { get; set; }
+        public float[]? Color { get; set; }
         public List<DriveDocument>? Drives { get; set; }
 
         public static MuscleDocument From(Muscle muscle) => new()
         {
             Name = muscle.Name,
-            Template = muscle.Template.Match(t => t, () => (string?)null),
+            Group = muscle.Group,
+            Template = muscle.Template.Match(t => t.Muscle, () => (string?)null),
+            Strand = muscle.Template.Match(t => t.Strand, () => 0),
             Side = muscle.Side.ToString().ToLowerInvariant(),
             Origin = AttachmentDocument.From(muscle.Origin),
             Insertion = AttachmentDocument.From(muscle.Insertion),
+            Hooks = muscle.Hooks.Count > 0 ? [.. muscle.Hooks.Select(AttachmentDocument.From)] : null,
             Facing = [muscle.Facing.X, muscle.Facing.Y, muscle.Facing.Z],
-            Shape = muscle.Shape.ToString().ToLowerInvariant(),
-            Action = muscle.Action.ToString().ToLowerInvariant(),
-            Radius = muscle.Radius,
-            Flatness = muscle.Flatness,
+            Width = muscle.Width,
             Thickness = muscle.Thickness,
+            Belly = muscle.Belly,
+            Tendon = muscle.Tendon,
             Volume = muscle.Volume,
-            Tendons = [muscle.Tendons.X, muscle.Tendons.Y],
+            Offset = muscle.Offset,
+            Fit = muscle.Fit.Match(f => f.ToArray(), () => (float[]?)null),
+            Color = [muscle.Color.X, muscle.Color.Y, muscle.Color.Z],
             Drives = muscle.Drives.Count > 0 ? [.. muscle.Drives.Select(DriveDocument.From)] : null,
         };
 
         public Maybe<Muscle> ToMuscle()
         {
-            if (string.IsNullOrWhiteSpace(Name) || Origin?.ToAttachment() is not { } origin || Insertion?.ToAttachment() is not { } insertion)
+            var hooks = (Hooks ?? []).Select(h => h.ToAttachment()).ToList();
+            if (string.IsNullOrWhiteSpace(Name) || Origin?.ToAttachment() is not { } origin || Insertion?.ToAttachment() is not { } insertion
+                || hooks.Any(h => h is null))
             {
                 return Maybe<Muscle>.None;
             }
             return new Muscle(
                 Name,
-                string.IsNullOrWhiteSpace(Template) ? Maybe<string>.None : Template,
+                string.IsNullOrWhiteSpace(Group) ? Name : Group,
+                string.IsNullOrWhiteSpace(Template) ? Maybe<MuscleSource>.None : new MuscleSource(Template, Strand),
                 Enum.TryParse<BoneSide>(Side, ignoreCase: true, out var side) ? side : BoneSide.Center,
                 origin,
                 insertion,
-                Facing is [var fx, var fy, var fz] ? new Vector3(fx, fy, fz) : Vector3.UnitY,
-                Enum.TryParse<MuscleShape>(Shape, ignoreCase: true, out var shape) ? shape : MuscleShape.Fusiform,
-                Enum.TryParse<MuscleAction>(Action, ignoreCase: true, out var action) ? action : MuscleAction.Flexor,
-                Radius,
-                Flatness,
+                [.. hooks.Select(h => h!.Value)],
+                Facing is [var fx, var fy, var fz] ? new Vector3(fx, fy, fz) : Vector3.UnitZ,
+                Width,
                 Thickness,
+                Belly ?? Muscle.DefaultBelly,
+                Tendon,
                 Volume,
-                Tendons is [var a, var b] ? new Vector2(a, b) : new Vector2(0.1f, 0.1f),
+                Offset,
+                Fit is { Length: MuscleShape.FitSize } fit ? Maybe<IReadOnlyList<float>>.Some(fit) : Maybe<IReadOnlyList<float>>.None,
+                Color is [var r, var g, var b] ? new Vector3(r, g, b) : new Vector3(0.75f, 0.2f, 0.2f),
                 [.. (Drives ?? []).Where(d => !string.IsNullOrWhiteSpace(d.Role)).Select(d => d.ToDrive())]);
         }
     }

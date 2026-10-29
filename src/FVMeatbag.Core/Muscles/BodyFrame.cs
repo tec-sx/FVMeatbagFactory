@@ -76,6 +76,62 @@ public sealed class BodyFrame
         return (forwardOutUp.X * Forward) + (forwardOutUp.Y * outward) + (forwardOutUp.Z * Up);
     }
 
+    /// <summary>
+    /// Rest point <paramref name="along"/> the bone, 0 at its joint and 1 at its tail: the joint of
+    /// the child that continues the Manny chain (upperarm to lowerarm, spine_03 to spine_04), else
+    /// its first child. A bone without children has no length.
+    /// </summary>
+    public Vector3 BonePoint(int bone, float along)
+    {
+        var head = Skeleton.WorldRest[bone].Translation;
+        return Tail(bone).Match(tail => Vector3.Lerp(head, Skeleton.WorldRest[tail].Translation, along), () => head);
+    }
+
+    /// <summary>The child bone a bone points at, or None for a leaf.</summary>
+    public Maybe<int> Tail(int bone)
+    {
+        var name = Skeleton.Bones[bone].Name;
+        var suffix = BoneNames.SideOf(name) switch
+        {
+            BoneSide.Left => "_l",
+            BoneSide.Right => "_r",
+            _ => "",
+        };
+        var children = Skeleton.ChildrenOf(bone).ToList();
+        foreach (var next in ChainNext(MannySkeleton.BaseName(name).ToLowerInvariant()))
+        {
+            var wanted = MannySkeleton.IsCore(next) ? next : next + suffix;
+            foreach (var child in children)
+            {
+                if (string.Equals(Skeleton.Bones[child].Name, wanted, StringComparison.OrdinalIgnoreCase))
+                {
+                    return child;
+                }
+            }
+        }
+        return children.FirstOrNone(_ => true);
+    }
+
+    private static IEnumerable<string> ChainNext(string baseName) => baseName switch
+    {
+        "pelvis" => ["spine_01"],
+        "spine_01" => ["spine_02"],
+        "spine_02" => ["spine_03"],
+        "spine_03" => ["spine_04", "neck_01"],
+        "spine_04" => ["spine_05", "neck_01"],
+        "spine_05" => ["neck_01"],
+        "neck_01" => ["neck_02", "head"],
+        "neck_02" => ["head"],
+        "clavicle" => ["upperarm"],
+        "upperarm" => ["lowerarm"],
+        "lowerarm" => ["hand"],
+        "hand" => ["middle_metacarpal", "middle_01"],
+        "thigh" => ["calf"],
+        "calf" => ["foot"],
+        "foot" => ["ball"],
+        _ => [],
+    };
+
     /// <summary>The attachment's model-space position at rest.</summary>
     public Vector3 RestPosition(MuscleAttachment attachment) =>
         Skeleton.FindBone(attachment.Bone).Match(b => Vector3.Transform(attachment.Local, Skeleton.WorldRest[b]), () => Vector3.Zero);
@@ -96,15 +152,17 @@ public sealed class BodyFrame
     public Vector3 ReflectDirection(Vector3 direction) => direction - (2f * Vector3.Dot(direction, Left) * Left);
 
     /// <summary>
-    /// The muscle on the other side: names and bones mirrored (<c>_l</c> ↔ <c>_r</c>), its ends
-    /// and facing reflected across the center plane. None if the skeleton lacks a mirrored bone.
+    /// The muscle on the other side: names and bones mirrored (<c>_l</c> ↔ <c>_r</c>), its ends,
+    /// hooks and facing reflected across the center plane. Its Fit to Skin is dropped, since the
+    /// other side's skin differs; fit it again. None if the skeleton lacks a mirrored bone.
     /// </summary>
     public Maybe<Muscle> Mirror(Muscle muscle)
     {
         ArgumentNullException.ThrowIfNull(muscle);
         var origin = MirrorAttachment(muscle.Origin);
         var insertion = MirrorAttachment(muscle.Insertion);
-        if (!origin.TryGetValue(out var o) || !insertion.TryGetValue(out var i)
+        var hooks = muscle.Hooks.Select(MirrorAttachment).ToList();
+        if (!origin.TryGetValue(out var o) || !insertion.TryGetValue(out var i) || hooks.Any(h => h.IsNone)
             || !Skeleton.FindBone(muscle.Origin.Bone).TryGetValue(out var sourceBone)
             || !Skeleton.FindBone(o.Bone).TryGetValue(out var targetBone))
         {
@@ -114,6 +172,7 @@ public sealed class BodyFrame
         return muscle with
         {
             Name = BoneNames.Mirror(muscle.Name),
+            Group = BoneNames.Mirror(muscle.Group),
             Side = muscle.Side switch
             {
                 BoneSide.Left => BoneSide.Right,
@@ -122,7 +181,28 @@ public sealed class BodyFrame
             },
             Origin = o,
             Insertion = i,
+            Hooks = [.. hooks.Select(h => h.Value)],
             Facing = ToLocalDirection(targetBone, facing),
+            Fit = Maybe<IReadOnlyList<float>>.None,
+        };
+    }
+
+    /// <summary>
+    /// Fit to Skin for <paramref name="muscle"/> at rest; see <see cref="MuscleShape.FitToSkin"/>.
+    /// The muscle unchanged if one of its bones is missing.
+    /// </summary>
+    public Muscle FitToSkin(Muscle muscle, SkinSurface skin)
+    {
+        ArgumentNullException.ThrowIfNull(muscle);
+        ArgumentNullException.ThrowIfNull(skin);
+        if (!Skeleton.FindBone(muscle.Origin.Bone).TryGetValue(out var originBone) || Skeleton.FindBone(muscle.Insertion.Bone).IsNone)
+        {
+            return muscle;
+        }
+        var facing = Vector3.TransformNormal(muscle.Facing, Skeleton.WorldRest[originBone]);
+        return muscle with
+        {
+            Fit = Maybe<IReadOnlyList<float>>.Some(MuscleShape.FitToSkin(muscle, RestPosition(muscle.Origin), RestPosition(muscle.Insertion), facing, skin)),
         };
     }
 

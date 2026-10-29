@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.Runtime.CompilerServices;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using FVMeatbag.Core.Import;
 using FVMeatbag.Core.Muscles;
 using FVMeatbag.Core.Project;
 using FVMeatbag.Core.Rig;
@@ -51,11 +53,16 @@ public sealed partial class MuscleDetailsViewModel : DetailsViewModel, IDisposab
 
     private Maybe<BodyFrame> Body => Maybe.From(_component.Skeleton).Bind(s => BodyFrame.From(s.Skeleton));
 
-    /// <summary>Template sizes are in body units (pelvis to head); 1 without a Manny body.</summary>
+    /// <summary>The rest mesh, for rays to the skin; built once per mesh.</summary>
+    private Maybe<SkinSurface> Skin => _asset.Bind(a => a.Geometry).Map(g => Skins.GetValue(g, SkinSurface.From));
+
+    private static readonly ConditionalWeakTable<MeshGeometry, SkinSurface> Skins = [];
+
+    /// <summary>Sizes are shown in body units (pelvis to head); 1 without a Manny body.</summary>
     private float Unit => Body.Match(b => b.Unit, () => 1f);
 
     public string Summary => Muscles.Count == 0
-        ? "No muscles yet. Add the body template to start."
+        ? "No muscles yet. Build them from the body template to start."
         : $"{Muscles.Count} muscle{(Muscles.Count == 1 ? "" : "s")}";
 
     /// <summary>Muscles whose bones are missing, a few lines at most.</summary>
@@ -71,8 +78,8 @@ public sealed partial class MuscleDetailsViewModel : DetailsViewModel, IDisposab
 
     public bool HasProblems => Problems.Length > 0;
 
-    /// <summary>The template places muscles by Manny bone names, so it needs pelvis, head and both upper arms.</summary>
-    public bool CanUseTemplate => Body.HasValue;
+    /// <summary>The template places muscles by Manny bone names under the skin, so it needs pelvis, head, both upper arms and the mesh.</summary>
+    public bool CanUseTemplate => Body.HasValue && Skin.HasValue;
 
     public bool ShowMuscles
     {
@@ -111,29 +118,37 @@ public sealed partial class MuscleDetailsViewModel : DetailsViewModel, IDisposab
     public bool HasSelection => Selected.HasValue;
 
     public string SelectedInfo => Selected.Match(
-        m => $"{m.Name}\n{m.Origin.Bone} → {m.Insertion.Bone}\n{m.Shape}, {m.Side}"
-            + m.Template.Match(t => $", from template {t}", () => ""),
+        m => $"{m.Name}{(m.Group != m.Name ? $", part of {m.Group}" : "")}\n{m.Origin.Bone} → {m.Insertion.Bone}"
+            + (m.Hooks.Count > 0 ? $", bends with {string.Join(", ", m.Hooks.Select(h => h.Bone))}" : "")
+            + (m.Fit.HasValue ? "\nFitted to the skin" : "\nNot fitted to the skin"),
         () => "No muscle selected. Pick one in the list.");
 
-    /// <summary>Belly half-width in body units (pelvis to head).</summary>
-    public double Radius
+    /// <summary>Belly radius across the muscle, in body units (pelvis to head).</summary>
+    public double Width
     {
-        get => Selected.Match(m => m.Radius / Unit, () => 0f);
-        set => Edit(m => m with { Radius = (float)value * Unit });
+        get => Selected.Match(m => m.Width / Unit, () => 0f);
+        set => Edit(m => m with { Width = (float)value * Unit });
     }
 
-    /// <summary>Depth over width of the belly's section: 1 round, lower flatter.</summary>
-    public double Flatness
-    {
-        get => Selected.Match(m => m.Flatness, () => 1f);
-        set => Edit(m => m with { Flatness = (float)value });
-    }
-
-    /// <summary>Where the bulk sits: positive a fuller belly, negative a slimmer one.</summary>
+    /// <summary>Belly radius towards the skin, in body units (pelvis to head).</summary>
     public double Thickness
     {
-        get => Selected.Match(m => m.Thickness, () => 0f);
-        set => Edit(m => m with { Thickness = (float)value });
+        get => Selected.Match(m => m.Thickness / Unit, () => 0f);
+        set => Edit(m => m with { Thickness = (float)value * Unit });
+    }
+
+    /// <summary>Where the strand is widest, 0 at the origin to 1 at the insertion.</summary>
+    public double Belly
+    {
+        get => Selected.Match(m => m.Belly, () => Muscle.DefaultBelly);
+        set => Edit(m => m with { Belly = (float)value });
+    }
+
+    /// <summary>Radius at the ends, relative to the belly.</summary>
+    public double Tendon
+    {
+        get => Selected.Match(m => m.Tendon, () => Muscle.DefaultTendon);
+        set => Edit(m => m with { Tendon = (float)value });
     }
 
     /// <summary>How strongly the belly bulges when the muscle shortens: 1 keeps its volume, 0 never bulges.</summary>
@@ -141,33 +156,6 @@ public sealed partial class MuscleDetailsViewModel : DetailsViewModel, IDisposab
     {
         get => Selected.Match(m => m.Volume, () => 1f);
         set => Edit(m => m with { Volume = (float)value });
-    }
-
-    public double OriginTendon
-    {
-        get => Selected.Match(m => m.Tendons.X, () => 0f);
-        set => Edit(m => m with { Tendons = m.Tendons with { X = (float)value } });
-    }
-
-    public double InsertionTendon
-    {
-        get => Selected.Match(m => m.Tendons.Y, () => 0f);
-        set => Edit(m => m with { Tendons = m.Tendons with { Y = (float)value } });
-    }
-
-    /// <summary>Choices for <see cref="ActionIndex"/>, in <see cref="MuscleAction"/> order.</summary>
-    public IReadOnlyList<string> ActionChoices { get; } = ["Flexor: bulges when it shortens", "Extensor: bulges when it lengthens"];
-
-    public int ActionIndex
-    {
-        get => Selected.Match(m => (int)m.Action, () => -1);
-        set
-        {
-            if (value >= 0)
-            {
-                Edit(m => m with { Action = (MuscleAction)value });
-            }
-        }
     }
 
     /// <summary>Corrective roles the selected muscle drives; many muscles may drive one role.</summary>
@@ -198,32 +186,32 @@ public sealed partial class MuscleDetailsViewModel : DetailsViewModel, IDisposab
         },
         () => "");
 
-    /// <summary>Adds every template muscle the mesh does not have yet; existing ones are kept as they are.</summary>
+    /// <summary>
+    /// Builds the body template like the Flicker Void tools: every muscle placed under the skin on the
+    /// left, mirrored to the right, fitted to the skin. Replaces earlier template muscles and keeps
+    /// hand-made ones.
+    /// </summary>
     [RelayCommand]
     private void AddTemplate()
     {
-        if (!Body.TryGetValue(out var body))
+        if (!Body.TryGetValue(out var body) || !Skin.TryGetValue(out var skin))
         {
-            Status = "The template needs a UE5 Manny skeleton (pelvis, head, upperarm_l, upperarm_r).";
+            Status = "The template needs a UE5 Manny skeleton (pelvis, head, upperarm_l, upperarm_r) and its mesh.";
             return;
         }
-        var report = MuscleTemplate.Default.Apply(body, Muscles);
-        var already = report.Skipped.Count(s => s.EndsWith(": already there", StringComparison.Ordinal));
-        Status = report.Added.Count == 0 && already == report.Skipped.Count
-            ? "Every template muscle is already there."
-            : report.Summary + (report.Skipped.Count > already ? "\n" + string.Join('\n', report.Skipped.Where(s => !s.EndsWith(": already there", StringComparison.Ordinal))) : "")
-                + " Save (Ctrl+S) to keep them.";
+        var report = MuscleTemplate.Default.Generate(body, skin, Muscles);
+        Status = report.Missing.Count > 0 ? report.Summary : report.Summary + " Save (Ctrl+S) to keep them.";
     }
 
-    /// <summary>Puts the selected muscle back to its template placement and shape; its drives are reset too.</summary>
+    /// <summary>Puts the selected muscle back to its template placement, shape and drives, fitted to the skin.</summary>
     [RelayCommand]
     private void ResetToTemplate()
     {
-        if (!Selected.TryGetValue(out var muscle) || !Body.TryGetValue(out var body))
+        if (!Selected.TryGetValue(out var muscle) || !Body.TryGetValue(out var body) || !Skin.TryGetValue(out var skin))
         {
             return;
         }
-        Status = muscle.Template.Bind(MuscleTemplate.Default.Find).Bind(entry => MuscleTemplate.Build(entry, muscle.Side, body)).Match(
+        Status = MuscleTemplate.Default.Rebuild(muscle, body, skin).Match(
             rebuilt =>
             {
                 Muscles.Set(rebuilt);
@@ -232,7 +220,31 @@ public sealed partial class MuscleDetailsViewModel : DetailsViewModel, IDisposab
             () => $"{muscle.Name} has no template to reset to.");
     }
 
-    /// <summary>Copies the selected muscle to the other side, replacing the twin if there is one.</summary>
+    /// <summary>Gives the selected muscle's rings the room under the skin; see <see cref="MuscleShape.FitToSkin"/>.</summary>
+    [RelayCommand]
+    private void FitToSkin()
+    {
+        if (Selected.TryGetValue(out var muscle) && Body.TryGetValue(out var body) && Skin.TryGetValue(out var skin))
+        {
+            Muscles.Set(body.FitToSkin(muscle with { Fit = Maybe<IReadOnlyList<float>>.None }, skin));
+            Status = $"Fitted {muscle.Name} to the skin.";
+        }
+    }
+
+    [RelayCommand]
+    private void FitAllToSkin()
+    {
+        if (Body.TryGetValue(out var body) && Skin.TryGetValue(out var skin))
+        {
+            foreach (var muscle in Muscles.Muscles.ToList())
+            {
+                Muscles.Set(body.FitToSkin(muscle with { Fit = Maybe<IReadOnlyList<float>>.None }, skin));
+            }
+            Status = $"Fitted {Muscles.Count} muscles to the skin.";
+        }
+    }
+
+    /// <summary>Copies the selected muscle to the other side, replacing the twin if there is one, and fits it there.</summary>
     [RelayCommand]
     private void Mirror()
     {
@@ -242,7 +254,7 @@ public sealed partial class MuscleDetailsViewModel : DetailsViewModel, IDisposab
         }
         Status = muscle.Side == BoneSide.Center
             ? $"{muscle.Name} sits on the center line; there is nothing to mirror to."
-            : Muscles.Mirror(muscle.Name, body).Match(
+            : Muscles.Mirror(muscle.Name, body, Skin).Match(
                 twin => $"Copied to {twin.Name}.",
                 () => $"The skeleton lacks the other side's bones for {muscle.Name}.");
     }

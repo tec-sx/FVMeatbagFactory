@@ -67,11 +67,12 @@ public sealed class MuscleSet
     }
 
     /// <summary>
-    /// Copies a sided muscle to the other side: mirrored name and bones (<c>upperarm_l</c> →
-    /// <c>upperarm_r</c>), attachments and facing reflected across the skeleton's mirror plane.
-    /// Returns the new muscle, or None for a center muscle or when the skeleton lacks the mirrored bones.
+    /// Copies a sided muscle to the other side, replacing its twin: mirrored name and bones
+    /// (<c>upperarm_l</c> → <c>upperarm_r</c>), attachments, hooks and facing reflected across the
+    /// skeleton's mirror plane, then fitted to <paramref name="skin"/> when given. Returns the new
+    /// muscle, or None for a center muscle or when the skeleton lacks the mirrored bones.
     /// </summary>
-    public Maybe<Muscle> Mirror(string name, BodyFrame body)
+    public Maybe<Muscle> Mirror(string name, BodyFrame body, Maybe<SkinSurface> skin = default)
     {
         ArgumentNullException.ThrowIfNull(body);
         if (!Find(name).TryGetValue(out var muscle) || muscle.Side == BoneSide.Center)
@@ -80,8 +81,9 @@ public sealed class MuscleSet
         }
         return body.Mirror(muscle).Map(mirrored =>
         {
-            Set(mirrored);
-            return mirrored;
+            var fitted = skin.Match(s => body.FitToSkin(mirrored, s), () => mirrored);
+            Set(fitted);
+            return fitted;
         });
     }
 
@@ -94,16 +96,17 @@ public sealed class MuscleSet
         for (var i = 0; i < _muscles.Count; i++)
         {
             var muscle = _muscles[i];
-            var renamed = muscle with
+            if (!new[] { muscle.Origin, muscle.Insertion }.Concat(muscle.Hooks).Any(a => string.Equals(a.Bone, oldName, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+            _muscles[i] = muscle with
             {
                 Origin = Rename(muscle.Origin, oldName, newName),
                 Insertion = Rename(muscle.Insertion, oldName, newName),
+                Hooks = [.. muscle.Hooks.Select(h => Rename(h, oldName, newName))],
             };
-            if (renamed != muscle)
-            {
-                _muscles[i] = renamed;
-                changed = true;
-            }
+            changed = true;
         }
         if (changed)
         {
